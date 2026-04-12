@@ -7,7 +7,7 @@ use parking_lot::Mutex;
 #[cfg(target_os = "macos")]
 use std::mem::MaybeUninit;
 use std::{thread, time::Duration};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use log::info;
 
 use crate::window;
@@ -36,7 +36,7 @@ pub fn select_all(enigo: &mut Enigo) {
     let _guard = SELECT_ALL.lock();
 
     let app_handle = APP.get().unwrap();
-    let resource_path = app_handle.path_resolver().app_dir()
+    let resource_path = app_handle.path().app_config_dir()
         .expect("failed to get app dir")
         .join("resources")
         .join("select-all.applescript");
@@ -65,7 +65,7 @@ pub fn left_arrow_click(enigo: &mut Enigo, n: usize) {
     let _guard = INPUT_LOCK.lock();
 
     let app_handle = APP.get().unwrap();
-    let resource_path = app_handle.path_resolver().app_dir()
+    let resource_path = app_handle.path().app_config_dir()
         .expect("failed to get app dir")
         .join("resources")
         .join("left.applescript");
@@ -93,7 +93,7 @@ pub fn right_arrow_click(enigo: &mut Enigo, n: usize) {
     let _guard = INPUT_LOCK.lock();
 
     let app_handle = APP.get().unwrap();
-    let resource_path = app_handle.path_resolver().app_dir()
+    let resource_path = app_handle.path().app_config_dir()
         .expect("failed to get app dir")
         .join("resources")
         .join("right.applescript");
@@ -121,7 +121,7 @@ pub fn backspace_click(enigo: &mut Enigo, n: usize) {
     let _guard = INPUT_LOCK.lock();
 
     let app_handle = APP.get().unwrap();
-    let resource_path = app_handle.path_resolver().app_dir()
+    let resource_path = app_handle.path().app_config_dir()
         .expect("failed to get app dir")
         .join("resources")
         .join("backspace.applescript");
@@ -180,7 +180,7 @@ pub fn copy(enigo: &mut Enigo) {
     let _guard = COPY_PASTE.lock();
 
     let app_handle = APP.get().unwrap();
-    let resource_path = app_handle.path_resolver().app_dir()
+    let resource_path = app_handle.path().app_config_dir()
         .expect("failed to get app dir")
         .join("resources")
         .join("copy.applescript");
@@ -214,7 +214,7 @@ pub fn paste(enigo: &mut Enigo) {
     let _guard = COPY_PASTE.lock();
 
     let app_handle = APP.get().unwrap();
-    let resource_path = app_handle.path_resolver().app_dir()
+    let resource_path = app_handle.path().app_config_dir()
         .expect("failed to get app dir")
         .join("resources")
         .join("paste.applescript");

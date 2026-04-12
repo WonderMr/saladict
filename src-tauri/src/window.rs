@@ -5,10 +5,13 @@ use crate::StringWrapper;
 use crate::APP;
 use dirs::cache_dir;
 use log::{info, warn};
+use tauri::Emitter;
+use tauri::Listener;
 use tauri::Manager;
 use tauri::Monitor;
-use tauri::Window;
-use tauri::WindowBuilder;
+use tauri::WebviewWindow;
+use tauri::WebviewWindowBuilder;
+use tauri::WebviewUrl;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use window_shadows::set_shadow;
 use tauri::{LogicalPosition, PhysicalPosition};
@@ -18,19 +21,18 @@ use mouse_position::mouse_position::Mouse;
 use serde_json;
 
 pub const THUMB_WIN_NAME: &str = "thumb";// Get daemon window instance
-fn get_daemon_window() -> Window {
+fn get_daemon_window() -> WebviewWindow {
     let app_handle = APP.get().unwrap();
-    match app_handle.get_window("daemon") {
+    match app_handle.get_webview_window("daemon") {
         Some(v) => v,
         None => {
             warn!("Daemon window not found, create new daemon window!");
-            WindowBuilder::new(
+            WebviewWindowBuilder::new(
                 app_handle,
                 "daemon",
-                tauri::WindowUrl::App("daemon.html".into()),
+                WebviewUrl::App("daemon.html".into()),
             )
             .title("Daemon")
-            .additional_browser_args("--disable-web-security")
             .visible(false)
             .build()
             .unwrap()
@@ -62,7 +64,7 @@ fn get_current_monitor(x: i32, y: i32) -> Monitor {
 }
 
 // Creating a window on the mouse monitor
-fn build_window(label: &str, title: &str) -> (Window, bool) {
+fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
     use mouse_position::mouse_position::{Mouse, Position};
 
     let mouse_position = match Mouse::get_mouse_position() {
@@ -76,7 +78,7 @@ fn build_window(label: &str, title: &str) -> (Window, bool) {
     let position = current_monitor.position();
 
     let app_handle = APP.get().unwrap();
-    match app_handle.get_window(label) {
+    match app_handle.get_webview_window(label) {
         Some(v) => {
             info!("Window existence: {}", label);
             v.set_focus().unwrap();
@@ -87,13 +89,12 @@ fn build_window(label: &str, title: &str) -> (Window, bool) {
             let hide_dock_icon = get("hide_dock_icon")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(true);
-            let mut builder = tauri::WindowBuilder::new(
+            let mut builder = WebviewWindowBuilder::new(
                 app_handle,
                 label,
-                tauri::WindowUrl::App("index.html".into()),
+                WebviewUrl::App("index.html".into()),
             )
             .position(position.x.into(), position.y.into())
-            .additional_browser_args("--disable-web-security")
             .focused(true)
             .title(title)
             .visible(false)
@@ -130,7 +131,7 @@ pub fn config_window() {
     window.center().unwrap();
 }
 
-pub fn translate_window() -> Window {
+pub fn translate_window() -> WebviewWindow {
     use mouse_position::mouse_position::{Mouse, Position};
     // Mouse physical position
     let mut mouse_position = match Mouse::get_mouse_position() {
@@ -321,7 +322,7 @@ pub fn recognize_window() {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn screenshot_window() -> Window {
+fn screenshot_window() -> WebviewWindow {
     let (window, _exists) = build_window("screenshot", "Screenshot");
 
     window.set_skip_taskbar(true).unwrap();
@@ -347,9 +348,8 @@ pub fn ocr_recognize() {
 
         let app_handle = APP.get().unwrap();
         let mut app_cache_dir_path = cache_dir().expect("Get Cache Dir Failed");
-        app_cache_dir_path.push(&app_handle.config().tauri.bundle.identifier);
+        app_cache_dir_path.push(&app_handle.config().identifier);
         if !app_cache_dir_path.exists() {
-            // 创建目录
             fs::create_dir_all(&app_cache_dir_path).expect("Create Cache Dir Failed");
         }
         app_cache_dir_path.push("pot_screenshot_cut.png");
@@ -380,9 +380,8 @@ pub fn ocr_translate() {
     {
         let app_handle = APP.get().unwrap();
         let mut app_cache_dir_path = cache_dir().expect("Get Cache Dir Failed");
-        app_cache_dir_path.push(&app_handle.config().tauri.bundle.identifier);
+        app_cache_dir_path.push(&app_handle.config().identifier);
         if !app_cache_dir_path.exists() {
-            // 创建目录
             fs::create_dir_all(&app_cache_dir_path).expect("Create Cache Dir Failed");
         }
         app_cache_dir_path.push("pot_screenshot_cut.png");
@@ -422,7 +421,7 @@ pub fn updater_window() {
 
 pub fn delete_thumb() {
     match APP.get() {
-        Some(handle) => match handle.get_window(THUMB_WIN_NAME) {
+        Some(handle) => match handle.get_webview_window(THUMB_WIN_NAME) {
             Some(window) => {
                 window.close().unwrap();
             }
@@ -434,7 +433,7 @@ pub fn delete_thumb() {
 
 pub fn close_thumb() {
     match APP.get() {
-        Some(handle) => match handle.get_window(THUMB_WIN_NAME) {
+        Some(handle) => match handle.get_webview_window(THUMB_WIN_NAME) {
             Some(window) => {
                 window
                     .set_position(LogicalPosition::new(-100.0, -100.0))
@@ -453,10 +452,10 @@ pub fn show_thumb(x: i32, y: i32) {
     window.show().unwrap();
 }
 
-pub fn get_thumb_window(x: i32, y: i32) -> Window {
+pub fn get_thumb_window(x: i32, y: i32) -> WebviewWindow {
     let handle = APP.get().unwrap();
     let position_offset = 7.0 as f64;
-    let window = match handle.get_window(THUMB_WIN_NAME) {
+    let window = match handle.get_webview_window(THUMB_WIN_NAME) {
         Some(window) => {
             info!("Thumb window already exists");
             window.unminimize().unwrap();
@@ -465,13 +464,13 @@ pub fn get_thumb_window(x: i32, y: i32) -> Window {
         }
         None => {
             info!("Thumb window does not exist");
-            
+
             #[cfg(any(target_os = "macos", target_os = "linux"))]
             let window = {
-                let mut builder = WindowBuilder::new(
+                let mut builder = WebviewWindowBuilder::new(
                     handle,
                     THUMB_WIN_NAME,
-                    tauri::WindowUrl::App("index.html".into()),
+                    WebviewUrl::App("index.html".into()),
                 )
                 .fullscreen(false)
                 .focused(false)
@@ -493,9 +492,9 @@ pub fn get_thumb_window(x: i32, y: i32) -> Window {
 
             #[cfg(target_os = "windows")]
             let window = {
-                let mut window = build_window(THUMB_WIN_NAME, THUMB_WIN_NAME).0;
+                let window = build_window(THUMB_WIN_NAME, THUMB_WIN_NAME).0;
                 set_shadow(&window, false).unwrap_or_default();
-                window.set_resizable(false);
+                window.set_resizable(false).unwrap();
                 window.set_skip_taskbar(true).unwrap();
                 window
                     .set_size(tauri::LogicalSize {
@@ -532,9 +531,7 @@ pub fn get_thumb_window(x: i32, y: i32) -> Window {
     window
 }
 
-pub fn post_process_window<R: tauri::Runtime>(window: &tauri::Window<R>) {
-    // window.set_visible_on_all_workspaces(true).unwrap();
-
+pub fn post_process_window(window: &WebviewWindow) {
     let _ = window.current_monitor();
 
     #[cfg(target_os = "macos")]
@@ -567,16 +564,16 @@ pub fn get_mouse_location() -> Result<(i32, i32), String> {
 
 pub fn notify_window(content: &str) {
     let app_handle = APP.get().unwrap();
-    
+
     // Save content to file
-    let app_dir = app_handle.path_resolver().app_dir().unwrap();
+    let app_dir = app_handle.path().app_config_dir().unwrap();
     let notify_file = app_dir.join("notify_content.json");
     let content_json = serde_json::json!({
         "content": content
     });
     std::fs::write(&notify_file, content_json.to_string()).unwrap();
-    
-    let window: Window = match app_handle.get_window("notify") {
+
+    let window: WebviewWindow = match app_handle.get_webview_window("notify") {
         Some(v) => {
             info!("Notification window exists");
             v.set_focus().unwrap();
@@ -587,7 +584,7 @@ pub fn notify_window(content: &str) {
             build_window("notify", "Notification").0
         }
     };
-    
+
     window.set_size(tauri::LogicalSize::new(400, 400)).unwrap();
     window.center().unwrap();
     window.set_maximizable(false).unwrap();

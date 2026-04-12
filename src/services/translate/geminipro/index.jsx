@@ -1,4 +1,4 @@
-import { fetch, Body } from '@tauri-apps/api/http';
+import { fetch, Body } from '../../../utils/http';
 import { Language } from './info';
 
 export async function translate(text, from, to, options = {}) {

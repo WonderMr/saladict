@@ -1,7 +1,7 @@
-import { readDir, BaseDirectory, readTextFile, exists } from '@tauri-apps/api/fs';
+import { readDir, BaseDirectory, readTextFile, exists } from '@tauri-apps/plugin-fs';
 import { appConfigDir, join } from '@tauri-apps/api/path';
-import { convertFileSrc } from '@tauri-apps/api/tauri';
-import { appWindow } from '@tauri-apps/api/window';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import React, { useState, useEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { Button } from '@nextui-org/react';
@@ -15,6 +15,8 @@ import { useConfig } from '../../hooks';
 import ControlArea from './ControlArea';
 import ImageArea from './ImageArea';
 import TextArea from './TextArea';
+
+const appWindow = getCurrentWindow();
 
 export const pluginListAtom = atom();
 
@@ -59,11 +61,11 @@ export default function Recognize() {
 
     const loadPluginList = async () => {
         let temp = {};
-        if (await exists(`plugins/recognize`, { dir: BaseDirectory.AppConfig })) {
-            const plugins = await readDir(`plugins/recognize`, { dir: BaseDirectory.AppConfig });
+        if (await exists(`plugins/recognize`, { baseDir: BaseDirectory.AppConfig })) {
+            const plugins = await readDir(`plugins/recognize`, { baseDir: BaseDirectory.AppConfig });
             for (const plugin of plugins) {
                 const infoStr = await readTextFile(`plugins/recognize/${plugin.name}/info.json`, {
-                    dir: BaseDirectory.AppConfig,
+                    baseDir: BaseDirectory.AppConfig,
                 });
                 let pluginInfo = JSON.parse(infoStr);
                 if ('icon' in pluginInfo) {

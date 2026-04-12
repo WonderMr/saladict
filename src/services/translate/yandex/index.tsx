@@ -1,4 +1,4 @@
-import { Body } from '@tauri-apps/api/http';
+import { Body } from '../../../utils/http';
 import { fetchWithUA } from '../../../utils/http';
 import { v4 as uuidv4 } from 'uuid';
 

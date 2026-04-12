@@ -1,13 +1,15 @@
 import { Card, CardBody, CardFooter, Button, Tooltip } from '@nextui-org/react';
-import { appWindow } from '@tauri-apps/api/window';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import React, { useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { MdContentCopy } from 'react-icons/md';
 import { useTranslation } from 'react-i18next';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@tauri-apps/api/core';
 import { atom, useAtom } from 'jotai';
 
 import { useConfig } from '../../../hooks';
+
+const appWindow = getCurrentWindow();
 
 export const base64Atom = atom('');
 let unlisten = null;

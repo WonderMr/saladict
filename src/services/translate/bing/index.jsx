@@ -1,4 +1,4 @@
-import { fetch } from '@tauri-apps/api/http';
+import { fetch } from '../../../utils/http';
 import { DEFAULT_EDGE_USER_AGENT } from '../../../utils/http';
 
 export async function translate(text, from, to) {
