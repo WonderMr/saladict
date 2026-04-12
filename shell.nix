@@ -37,6 +37,9 @@ pkgs.mkShell {
     xorg.libXtst
     tesseract
 
+    # Tray icon
+    libayatana-appindicator
+
     # Build tools
     dpkg
   ];

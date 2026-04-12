@@ -214,10 +214,7 @@ fn on_clipboard_monitor_click(app: &AppHandle) {
         .lock()
         .unwrap()
         .replace_range(.., &current.to_string());
-    if current {
-        start_clipboard_monitor(app.clone());
-    }
-    // Rebuild tray to reflect new state
+    // Rebuild tray to reflect new state (monitor loop reads the flag, no need to restart)
     update_tray(app.clone(), "".to_string(), "".to_string());
 }
 fn on_auto_copy_click(app: &AppHandle, mode: &str) {
