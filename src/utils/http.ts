@@ -60,7 +60,7 @@ export const ResponseType = {
 interface V1FetchOptions {
     method?: string;
     headers?: Record<string, string>;
-    body?: Body | BodyInit;
+    body?: Body | BodyInit | { type: string; payload: any };
     query?: Record<string, string>;
     responseType?: number;
 }
@@ -88,6 +88,18 @@ export async function fetch<T = any>(url: string, options?: V1FetchOptions): Pro
         body = options.body.content;
         if (options.body.contentType) {
             extraHeaders['Content-Type'] = options.body.contentType;
+        }
+    } else if (options?.body && typeof options.body === 'object' && 'type' in options.body && 'payload' in options.body) {
+        // V1-style discriminated union body: { type: 'Json'|'Text'|'Form', payload: any }
+        const v1Body = options.body as { type: string; payload: any };
+        if (v1Body.type === 'Json') {
+            body = JSON.stringify(v1Body.payload);
+            extraHeaders['Content-Type'] = 'application/json';
+        } else if (v1Body.type === 'Text') {
+            body = String(v1Body.payload);
+        } else if (v1Body.type === 'Form') {
+            body = new URLSearchParams(v1Body.payload).toString();
+            extraHeaders['Content-Type'] = 'application/x-www-form-urlencoded';
         }
     } else {
         body = options?.body as BodyInit | undefined;
@@ -132,7 +144,7 @@ export async function fetch<T = any>(url: string, options?: V1FetchOptions): Pro
 export interface FetchWithUAOptions {
     method?: string;
     headers?: Record<string, string>;
-    body?: BodyInit;
+    body?: Body | BodyInit;
     query?: Record<string, string>;
     responseType?: number;
 }

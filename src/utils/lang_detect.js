@@ -39,7 +39,7 @@ async function baidu_detect(text) {
         body: new URLSearchParams({ query: text }).toString(),
     });
     if (res.ok) {
-        let result = await res.json();
+        let result = res.data;
         if (result.lan && result.lan in lang_map) {
             return lang_map[result.lan];
         }
@@ -77,7 +77,7 @@ async function tencent_detect(text) {
         body: new URLSearchParams({ sourceText: text }).toString(),
     });
     if (res.ok) {
-        let result = await res.json();
+        let result = res.data;
         if (result.translate && result.translate.source && result.translate.source in lang_map) {
             return lang_map[result.translate.source];
         }
@@ -132,7 +132,7 @@ async function google_detect(text) {
         }
     );
     if (res.ok) {
-        const result = await res.json();
+        const result = res.data;
         if (result[2] && result[2] in lang_map) {
             return lang_map[result[2]];
         }
@@ -178,7 +178,7 @@ async function niutrans_detect(text) {
         headers: { 'content-type': 'application/json' },
     });
     if (res.ok) {
-        const result = await res.json();
+        const result = res.data;
         if (result['language'] && result['language'] in lang_map) {
             return lang_map[result['language']];
         }
@@ -264,7 +264,7 @@ async function bing_detect(text) {
         },
     });
     if (token.ok) {
-        const tokenText = await token.text();
+        const tokenText = token.data;
         const url = 'https://api-edge.cognitive.microsofttranslator.com/detect?api-version=3.0';
 
         let res = await fetch(url, {
@@ -290,7 +290,7 @@ async function bing_detect(text) {
         });
 
         if (res.ok) {
-            let result = await res.json();
+            let result = res.data;
             if (result[0].language && result[0].language in lang_map) {
                 return lang_map[result[0].language];
             }

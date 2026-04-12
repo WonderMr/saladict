@@ -17,10 +17,7 @@ pub fn init_config(app: &mut tauri::App) {
 
     match &store {
         Ok(_) => info!("Config loaded"),
-        Err(e) => {
-            warn!("Config load error: {:?}", e);
-            info!("Config not found, creating new config");
-        }
+        Err(e) => warn!("Config load error: {:?}", e),
     }
     app.manage(StoreWrapper(store.expect("Failed to create config store")));
     let _ = check_service_available();

@@ -5,7 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-shell';
 import React, { useEffect, useState } from 'react';
 import { getCurrentWindow, getAllWindows } from '@tauri-apps/api/window';
-import { exit, relaunch } from '@tauri-apps/plugin-process';
+import { relaunch } from '@tauri-apps/plugin-process';
 import toast, { Toaster } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { listen } from '@tauri-apps/api/event';
@@ -17,8 +17,6 @@ import { osType } from '../../utils/env';
 
 const appWindow = getCurrentWindow();
 
-let unlisten = 0;
-let eventId = 0;
 const UPDATE_WINDOW_LABEL = 'updater';
 const APP_STORE_ID = '6740262076';
 const MAC_APP_STORE_URL = `https://apps.apple.com/app/id${APP_STORE_ID}`;
