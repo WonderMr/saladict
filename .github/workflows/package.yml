@@ -317,9 +317,9 @@ jobs:
                   $env:TAURI_PRIVATE_KEY="${{ secrets.TAURI_PRIVATE_KEY }}"
                   $env:TAURI_KEY_PASSWORD="${{ secrets.TAURI_KEY_PASSWORD }}"
                   if ("${{ matrix.target }}" -eq "x86_64-pc-windows-msvc") {
-                      pnpm tauri build -b nsis,msi,updater --target ${{ matrix.target }}
+                      pnpm tauri build -b nsis,msi --target ${{ matrix.target }}
                   } else {
-                      pnpm tauri build -b nsis,updater --target ${{ matrix.target }}
+                      pnpm tauri build -b nsis --target ${{ matrix.target }}
                   }
             - name: Upload Artifacts
               uses: actions/upload-artifact@v4
@@ -395,7 +395,7 @@ jobs:
               run: |
                   $env:TAURI_PRIVATE_KEY="${{ secrets.TAURI_PRIVATE_KEY }}"
                   $env:TAURI_KEY_PASSWORD="${{ secrets.TAURI_KEY_PASSWORD }}"
-                  pnpm tauri build -b nsis,updater --target ${{ matrix.target }}
+                  pnpm tauri build -b nsis --target ${{ matrix.target }}
                   Rename-Item .\src-tauri\target\${{ matrix.target }}\release\bundle\nsis\saladict_${{needs.change-version.outputs.version}}_${{ matrix.arch }}-setup.exe saladict_${{needs.change-version.outputs.version}}_${{ matrix.arch }}_fix_webview2_runtime-setup.exe
                   Rename-Item .\src-tauri\target\${{ matrix.target }}\release\bundle\nsis\saladict_${{needs.change-version.outputs.version}}_${{ matrix.arch }}-setup.nsis.zip saladict_${{needs.change-version.outputs.version}}_${{ matrix.arch }}_fix_webview2_runtime-setup.nsis.zip
                   Rename-Item .\src-tauri\target\${{ matrix.target }}\release\bundle\nsis\saladict_${{needs.change-version.outputs.version}}_${{ matrix.arch }}-setup.nsis.zip.sig saladict_${{needs.change-version.outputs.version}}_${{ matrix.arch }}_fix_webview2_runtime-setup.nsis.zip.sig
