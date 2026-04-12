@@ -12,24 +12,33 @@ pub fn check_update(app_handle: tauri::AppHandle) {
     };
     if enable {
         tauri::async_runtime::spawn(async move {
-            match tauri::updater::builder(app_handle).check().await {
-                Ok(update) => {
-                    if update.is_update_available() {
-                        let should_show = match get("ignore_updater_version") {
-                            Some(version) => {
-                                version.as_str().unwrap() != update.latest_version()
+            use tauri_plugin_updater::UpdaterExt;
+            match app_handle.updater().and_then(|u| Ok(u)) {
+                Ok(updater) => {
+                    match updater.check().await {
+                        Ok(Some(update)) => {
+                            let should_show = match get("ignore_updater_version") {
+                                Some(version) => {
+                                    version.as_str().unwrap() != update.version
+                                }
+                                None => true
+                            };
+                            info!("New version available");
+                            if should_show {
+                                info!("Show updater window");
+                                updater_window();
                             }
-                            None => true
-                        };
-                        info!("New version available");
-                        if should_show {
-                            info!("Show updater window");
-                            updater_window();
+                        }
+                        Ok(None) => {
+                            info!("No update available");
+                        }
+                        Err(e) => {
+                            warn!("Failed to check update: {}", e);
                         }
                     }
                 }
                 Err(e) => {
-                    warn!("Failed to check update: {}", e);
+                    warn!("Failed to create updater: {}", e);
                 }
             }
         });
@@ -53,7 +62,7 @@ pub fn check_notify() {
                 "en".to_string()
             }
         };
-        
+
         let client = reqwest::Client::new();
         match client.get("https://saladict.aichatone.com/api/app-check-notify")
             .query(&[("language", &language)])
@@ -63,7 +72,7 @@ pub fn check_notify() {
                     match response.json::<serde_json::Value>().await {
                         Ok(json) => {
                             info!("Got notification response");
-                            
+
                             // Get the OS-specific config
                             if let Some(os_config) = json.get(os_type) {
                                 let version = os_config.get("version")
@@ -75,16 +84,16 @@ pub fn check_notify() {
                                 let enable = os_config.get("enable")
                                     .and_then(|v| v.as_bool())
                                     .unwrap_or(false);
-                                
+
                                 let last_version = get("last_notify_version")
                                     .and_then(|v| v.as_str().map(String::from))
                                     .unwrap_or_default();
-                                
+
                                 info!("Last notification version: {}, Current version: {}", last_version, version);
-                                
+
                                 // Set the last checked version regardless of notification status
                                 set("last_notify_version", version);
-                                
+
                                 if enable && version != last_version && !content.is_empty() {
                                     info!("Showing notification with content: {}", content);
                                     notify_window(content);

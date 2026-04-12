@@ -1,6 +1,6 @@
 import { useLocation, useRoutes } from 'react-router-dom';
 import React, { useEffect, useState } from 'react';
-import { appWindow } from '@tauri-apps/api/window';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Card, Divider } from '@nextui-org/react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,6 +14,8 @@ import { HiOutlineQuestionMarkCircle } from 'react-icons/hi';
 import { MdCreditCard, MdSettingsSuggest } from 'react-icons/md';
 import { AiFillCloud } from 'react-icons/ai';
 import './style.css';
+
+const appWindow = getCurrentWindow();
 
 export default function Config() {
     const [transparent] = useConfig('transparent', true);

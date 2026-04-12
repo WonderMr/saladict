@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { appWindow } from '@tauri-apps/api/window';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+
+const appWindow = getCurrentWindow();
 import { useTranslation } from 'react-i18next';
-import { info } from 'tauri-plugin-log-api';
-import { readTextFile, BaseDirectory } from '@tauri-apps/api/fs';
+import { info } from '@tauri-apps/plugin-log';
+import { readTextFile, BaseDirectory } from '@tauri-apps/plugin-fs';
 import { appName } from '../../utils/env';
 
 export default function Notify() {

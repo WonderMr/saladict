@@ -1,11 +1,13 @@
 import { VscChromeClose, VscChromeMinimize, VscChromeMaximize, VscChromeRestore } from 'react-icons/vsc';
 import React, { useEffect, useState } from 'react';
-import { appWindow } from '@tauri-apps/api/window';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
 import { Button } from '@nextui-org/react';
 
 import { osType } from '../../utils/env';
 import './style.css';
+
+const appWindow = getCurrentWindow();
 
 export default function WindowControl() {
     const [isMax, setIsMax] = useState(false);

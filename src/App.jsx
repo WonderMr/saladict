@@ -1,11 +1,11 @@
-import { appWindow } from '@tauri-apps/api/window';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { BrowserRouter } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { warn } from 'tauri-plugin-log-api';
+import { warn } from '@tauri-apps/plugin-log';
 import React, { useEffect } from 'react';
 import { useTheme } from 'next-themes';
 
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@tauri-apps/api/core';
 import Screenshot from './window/Screenshot';
 import Translate from './window/Translate';
 import Recognize from './window/Recognize';
@@ -19,6 +19,9 @@ import { Providers } from './providers';
 import './style.css';
 import './i18n';
 import { ThumbWindow } from './window/Thumb';
+
+const appWindow = getCurrentWindow();
+
 const windowMap = {
     translate: <Translate />,
     screenshot: <Screenshot />,
@@ -44,7 +47,7 @@ const getSystemLanguage = () => {
     if (!langMain) {
         return 'en';
     }
-    const matchedLang = Object.keys(uiLanguage).find(lang => 
+    const matchedLang = Object.keys(uiLanguage).find(lang =>
         typeof lang === 'string' && (lang.startsWith(langMain + '_') || lang === langMain)
     );
     return matchedLang || 'en';

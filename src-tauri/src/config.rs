@@ -2,27 +2,27 @@ use crate::{error::Error, APP};
 use dirs::config_dir;
 use log::{info, warn};
 use serde_json::{json, Value};
-use std::sync::Mutex;
-use tauri::{Manager, Wry};
+use std::sync::Arc;
+use tauri::Manager;
 use tauri_plugin_store::{Store, StoreBuilder};
 
-pub struct StoreWrapper(pub Mutex<Store<Wry>>);
+pub struct StoreWrapper(pub Arc<Store<tauri::Wry>>);
 
 pub fn init_config(app: &mut tauri::App) {
     let config_path = config_dir().unwrap();
-    let config_path = config_path.join(app.config().tauri.bundle.identifier.clone());
+    let config_path = config_path.join(app.config().identifier.clone());
     let config_path = config_path.join("config.json");
     info!("Load config from: {:?}", config_path);
-    let mut store = StoreBuilder::new(app.handle(), config_path).build();
+    let store = StoreBuilder::new(app.handle(), config_path).build();
 
-    match store.load() {
+    match &store {
         Ok(_) => info!("Config loaded"),
         Err(e) => {
             warn!("Config load error: {:?}", e);
             info!("Config not found, creating new config");
         }
     }
-    app.manage(StoreWrapper(Mutex::new(store)));
+    app.manage(StoreWrapper(store.expect("Failed to create config store")));
     let _ = check_service_available();
 }
 
@@ -149,7 +149,7 @@ pub fn check_service_available() -> Result<(), Error> {
 pub fn get_plugin_list(plugin_type: &str) -> Option<Vec<String>> {
     let app_handle = APP.get().unwrap();
     let config_dir = dirs::config_dir()?;
-    let config_dir = config_dir.join(app_handle.config().tauri.bundle.identifier.clone());
+    let config_dir = config_dir.join(app_handle.config().identifier.clone());
     let plugin_dir = config_dir.join("plugins");
     let plugin_dir = plugin_dir.join(plugin_type);
 
@@ -176,22 +176,22 @@ pub fn get_plugin_list(plugin_type: &str) -> Option<Vec<String>> {
 
 pub fn get(key: &str) -> Option<Value> {
     let state = APP.get().unwrap().state::<StoreWrapper>();
-    let store = state.0.lock().unwrap();
+    let store = &state.0;
     match store.get(key) {
-        Some(value) => Some(value.clone()),
+        Some(value) => Some(value),
         None => None,
     }
 }
 
 pub fn set<T: serde::ser::Serialize>(key: &str, value: T) {
     let state = APP.get().unwrap().state::<StoreWrapper>();
-    let mut store = state.0.lock().unwrap();
-    store.insert(key.to_string(), json!(value)).unwrap();
+    let store = &state.0;
+    store.set(key.to_string(), json!(value));
     let _ = store.save().inspect_err(|e| eprintln!("Save config failed: {e}"));
 }
 
 pub fn is_first_run() -> bool {
     let state = APP.get().unwrap().state::<StoreWrapper>();
-    let store = state.0.lock().unwrap();
+    let store = &state.0;
     store.is_empty()
 }

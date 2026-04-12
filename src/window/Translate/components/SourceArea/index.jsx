@@ -1,9 +1,11 @@
 import { Button, Card, CardBody, CardFooter, ButtonGroup, Chip, Tooltip, Spacer } from '@nextui-org/react';
-import { BaseDirectory, readTextFile } from '@tauri-apps/api/fs';
+import { BaseDirectory, readTextFile } from '@tauri-apps/plugin-fs';
 import React, { useEffect, useRef, useState } from 'react';
-import { writeText } from '@tauri-apps/api/clipboard';
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { HiOutlineVolumeUp } from 'react-icons/hi';
-import { appWindow } from '@tauri-apps/api/window';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+
+const appWindow = getCurrentWindow();
 import toast, { Toaster } from 'react-hot-toast';
 import { listen } from '@tauri-apps/api/event';
 import { MdContentCopy } from 'react-icons/md';
@@ -11,7 +13,7 @@ import { MdWrapText } from 'react-icons/md';
 import { useTranslation } from 'react-i18next';
 import { HiTranslate } from 'react-icons/hi';
 import { LuDelete } from 'react-icons/lu';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@tauri-apps/api/core';
 import { atom, useAtom } from 'jotai';
 import { getServiceName, getServiceSouceType, ServiceSourceType } from '../../../../utils/service_instance';
 import { useConfig, useSyncAtom, useVoice, useToastStyle } from '../../../../hooks';
@@ -20,8 +22,8 @@ import * as recognizeServices from '../../../../services/recognize';
 import * as builtinTtsServices from '../../../../services/tts';
 import detect from '../../../../utils/lang_detect';
 import { store } from '../../../../utils/store';
-import { info } from 'tauri-plugin-log-api';
-import { debug } from 'tauri-plugin-log-api';
+import { info } from '@tauri-apps/plugin-log';
+import { debug } from '@tauri-apps/plugin-log';
 
 export const sourceTextAtom = atom('');
 export const detectLanguageAtom = atom('');

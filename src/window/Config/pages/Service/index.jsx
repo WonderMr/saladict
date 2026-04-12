@@ -1,9 +1,9 @@
-import { readDir, BaseDirectory, readTextFile, exists } from '@tauri-apps/api/fs';
+import { readDir, BaseDirectory, readTextFile, exists } from '@tauri-apps/plugin-fs';
 import { listen } from '@tauri-apps/api/event';
 import { useTranslation } from 'react-i18next';
 import { Tabs, Tab } from '@nextui-org/react';
 import { appConfigDir, join } from '@tauri-apps/api/path';
-import { convertFileSrc } from '@tauri-apps/api/tauri';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import React, { useEffect, useState } from 'react';
 import Translate from './Translate';
 import Recognize from './Recognize';

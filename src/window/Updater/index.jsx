@@ -1,11 +1,11 @@
 import { Code, Card, CardBody, Button, Progress, Skeleton, Checkbox } from '@nextui-org/react';
-import { checkUpdate, installUpdate } from '@tauri-apps/api/updater';
+import { check } from '@tauri-apps/plugin-updater';
 import { getVersion } from '@tauri-apps/api/app';
-import { invoke } from '@tauri-apps/api/tauri';
-import { open } from '@tauri-apps/api/shell';
+import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-shell';
 import React, { useEffect, useState } from 'react';
-import { appWindow, WebviewWindow, getAll } from '@tauri-apps/api/window';
-import { relaunch } from '@tauri-apps/api/process';
+import { getCurrentWindow, getAllWindows } from '@tauri-apps/api/window';
+import { exit, relaunch } from '@tauri-apps/plugin-process';
 import toast, { Toaster } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { listen } from '@tauri-apps/api/event';
@@ -14,6 +14,8 @@ import { lte } from 'semver';
 
 import { useConfig, useToastStyle } from '../../hooks';
 import { osType } from '../../utils/env';
+
+const appWindow = getCurrentWindow();
 
 let unlisten = 0;
 let eventId = 0;
@@ -53,15 +55,15 @@ export default function Updater() {
             try {
                 setIsAppStore(await invoke('is_app_store_version'));
 
-                const update = await checkUpdate();
-                if (update.shouldUpdate) {
-                    setBody(update.manifest.body);
-                    setUpdateVersion(update.manifest.version);
+                const update = await check();
+                if (update) {
+                    setBody(update.body || '');
+                    setUpdateVersion(update.version);
 
                     // 如果是 App Store 版本，需要检查 App Store 上的版本
                     if (isAppStore) {
                         const storeVersion = await getAppStoreVersion();
-                        if (storeVersion === update.manifest.version) {
+                        if (storeVersion === update.version) {
                             setShouldUpdate(true);
                         } else {
                             // no need to show updater window because not available on App Store
@@ -69,24 +71,24 @@ export default function Updater() {
                         }
 
                     } else {
-                        setShouldUpdate(update.shouldUpdate);
+                        setShouldUpdate(true);
                     }
 
                     // Extract force update version from changelog
-                    const forceUpdateMatch = update.manifest.body.match(/--forceUpdate--(\d+\.\d+\.\d+)/);
+                    const forceUpdateMatch = (update.body || '').match(/--forceUpdate--(\d+\.\d+\.\d+)/);
                     if (forceUpdateMatch) {
                         const forceVersion = forceUpdateMatch[1];
                         const currentVersion = await getVersion();
-                        
+
                         // less than or equal to forceUpdateVersion
                         const isForceUpdate = lte(currentVersion, forceVersion);
                         setForceUpdate(isForceUpdate);
-                        
+
                         if (isForceUpdate) {
                             appWindow.setClosable(false);
                             // listen window created event, close all other windows except updater
                             const unlisten = await listen('tauri://window-created', async () => {
-                                const windows = await getAll();
+                                const windows = await getAllWindows();
                                 for (const window of windows) {
                                     if (window.label !== UPDATE_WINDOW_LABEL) {
                                         await window.close();
@@ -106,20 +108,6 @@ export default function Updater() {
 
         // 执行更新检查
         checkForUpdate();
-
-        if (unlisten === 0) {
-            unlisten = listen('tauri://update-download-progress', (e) => {
-                if (eventId === 0) {
-                    eventId = e.id;
-                }
-                if (e.id === eventId) {
-                    setTotal(e.payload.contentLength);
-                    setDownloaded((a) => {
-                        return a + e.payload.chunkLength;
-                    });
-                }
-            });
-        }
     }, []);
 
     const handleUpdate = async () => {
@@ -128,16 +116,32 @@ export default function Updater() {
             await open(MAC_APP_STORE_URL);
             appWindow.close();
         } else {
-            // 正常更新流程
-            installUpdate().then(
-                () => {
+            // 正常更新流程 - in v2, use the updater plugin directly
+            try {
+                const update = await check();
+                if (update) {
+                    let totalBytes = 0;
+                    let downloadedBytes = 0;
+                    await update.downloadAndInstall((event) => {
+                        switch (event.event) {
+                            case 'Started':
+                                totalBytes = event.data.contentLength || 0;
+                                setTotal(totalBytes);
+                                break;
+                            case 'Progress':
+                                downloadedBytes += event.data.chunkLength;
+                                setDownloaded(downloadedBytes);
+                                break;
+                            case 'Finished':
+                                break;
+                        }
+                    });
                     toast.success(t('updater.installed'), { style: toastStyle, duration: 10000 });
-                    relaunch();
-                },
-                (e) => {
-                    toast.error(e.toString(), { style: toastStyle });
+                    await relaunch();
                 }
-            );
+            } catch (e) {
+                toast.error(e.toString(), { style: toastStyle });
+            }
         }
     };
 
@@ -262,7 +266,7 @@ export default function Updater() {
                         color='primary'
                         onPress={handleUpdate}
                     >
-                        {isAppStore 
+                        {isAppStore
                             ? t('updater.open_app_store')
                             : downloaded !== 0
                                 ? downloaded > total
