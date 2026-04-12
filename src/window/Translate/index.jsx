@@ -1,8 +1,6 @@
 import { readDir, BaseDirectory, readTextFile, exists } from '@tauri-apps/plugin-fs';
 import { DragDropContext, Draggable, Droppable } from 'react-beautiful-dnd';
 import { getCurrentWindow, currentMonitor } from '@tauri-apps/api/window';
-
-const appWindow = getCurrentWindow();
 import { appConfigDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { Spacer, Button } from '@nextui-org/react';
@@ -19,6 +17,8 @@ import { useConfig } from '../../hooks';
 import { store } from '../../utils/store';
 import { info } from '@tauri-apps/plugin-log';
 import { default_translate_service_list } from '../../services/translate/constants';
+
+const appWindow = getCurrentWindow();
 
 let blurTimeout = null;
 let resizeTimeout = null;

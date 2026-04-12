@@ -3,11 +3,11 @@ import { appCacheDir, join } from '@tauri-apps/api/path';
 import { currentMonitor } from '@tauri-apps/api/window';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-
-const appWindow = getCurrentWindow();
 import { emit } from '@tauri-apps/api/event';
 import { warn } from '@tauri-apps/plugin-log';
 import { invoke } from '@tauri-apps/api/core';
+
+const appWindow = getCurrentWindow();
 
 export default function Screenshot() {
     const [imgurl, setImgurl] = useState('');

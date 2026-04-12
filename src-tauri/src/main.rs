@@ -180,6 +180,15 @@ fn main() {
             aliyun,
             is_app_store_version
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| match event {
+            tauri::RunEvent::Ready => {
+                mouse_hook::bind_mouse_hook();
+            }
+            tauri::RunEvent::ExitRequested { api, .. } => {
+                api.prevent_exit();
+            }
+            _ => {}
+        });
 }

@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-
-const appWindow = getCurrentWindow();
 import { useTranslation } from 'react-i18next';
 import { info } from '@tauri-apps/plugin-log';
 import { readTextFile, BaseDirectory } from '@tauri-apps/plugin-fs';
 import { appName } from '../../utils/env';
+
+const appWindow = getCurrentWindow();
 
 export default function Notify() {
     const [notification, setNotification] = useState({ title: '', content: '' });
@@ -15,7 +15,7 @@ export default function Notify() {
         info("Notify component mounted");
         const readContent = async () => {
             try {
-                const content = await readTextFile('notify_content.json', { dir: BaseDirectory.App });
+                const content = await readTextFile('notify_content.json', { baseDir: BaseDirectory.AppConfig });
                 info(`Read notification content: ${content}`);
                 const data = JSON.parse(content);
                 setNotification(data);

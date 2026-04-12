@@ -53,7 +53,8 @@ export default function Updater() {
 
         async function checkForUpdate() {
             try {
-                setIsAppStore(await invoke('is_app_store_version'));
+                const appStoreFlag = await invoke('is_app_store_version');
+                setIsAppStore(appStoreFlag);
 
                 const update = await check();
                 if (update) {
@@ -61,7 +62,7 @@ export default function Updater() {
                     setUpdateVersion(update.version);
 
                     // 如果是 App Store 版本，需要检查 App Store 上的版本
-                    if (isAppStore) {
+                    if (appStoreFlag) {
                         const storeVersion = await getAppStoreVersion();
                         if (storeVersion === update.version) {
                             setShouldUpdate(true);
@@ -129,7 +130,7 @@ export default function Updater() {
                                 setTotal(totalBytes);
                                 break;
                             case 'Progress':
-                                downloadedBytes += event.data.chunkLength;
+                                downloadedBytes += event.data.chunkLength ?? 0;
                                 setDownloaded(downloadedBytes);
                                 break;
                             case 'Finished':

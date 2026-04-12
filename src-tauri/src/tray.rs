@@ -14,7 +14,7 @@ use crate::APP;
 
 pub fn build_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let menu = build_tray_menu(app.handle(), "", "")?;
-    let _tray = TrayIconBuilder::new()
+    let _tray = TrayIconBuilder::with_id("main")
         .icon(app.default_window_icon().unwrap().clone())
         .icon_as_template(true)
         .menu(&menu)

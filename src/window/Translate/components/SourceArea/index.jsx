@@ -4,8 +4,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { HiOutlineVolumeUp } from 'react-icons/hi';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-
-const appWindow = getCurrentWindow();
 import toast, { Toaster } from 'react-hot-toast';
 import { listen } from '@tauri-apps/api/event';
 import { MdContentCopy } from 'react-icons/md';
@@ -24,6 +22,8 @@ import detect from '../../../../utils/lang_detect';
 import { store } from '../../../../utils/store';
 import { info } from '@tauri-apps/plugin-log';
 import { debug } from '@tauri-apps/plugin-log';
+
+const appWindow = getCurrentWindow();
 
 export const sourceTextAtom = atom('');
 export const detectLanguageAtom = atom('');

@@ -2,8 +2,6 @@ import { readDir, BaseDirectory, readTextFile, exists } from '@tauri-apps/plugin
 import { appConfigDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-
-const appWindow = getCurrentWindow();
 import React, { useState, useEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { Button } from '@nextui-org/react';
@@ -17,6 +15,8 @@ import { useConfig } from '../../hooks';
 import ControlArea from './ControlArea';
 import ImageArea from './ImageArea';
 import TextArea from './TextArea';
+
+const appWindow = getCurrentWindow();
 
 export const pluginListAtom = atom();
 
