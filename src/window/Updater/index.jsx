@@ -139,6 +139,8 @@ export default function Updater() {
                     await relaunch();
                 }
             } catch (e) {
+                setDownloaded(0);
+                setTotal(0);
                 toast.error(e.toString(), { style: toastStyle });
             }
         }
@@ -231,7 +233,7 @@ export default function Updater() {
                 <Progress
                     aria-label='Downloading...'
                     label={t('updater.progress')}
-                    value={(downloaded / total) * 100}
+                    value={total > 0 ? (downloaded / total) * 100 : 0}
                     classNames={{
                         base: 'w-full px-[80px]',
                         track: 'drop-shadow-md border border-default',
