@@ -238,8 +238,11 @@ fn on_check_update_click() {
     updater_window();
 }
 fn on_view_log_click(app: &AppHandle) {
-    let log_path = app.path().app_log_dir().unwrap();
-    let _ = tauri_plugin_opener::open_path(log_path.to_str().unwrap(), None::<&str>);
+    if let Ok(log_path) = app.path().app_log_dir() {
+        if let Some(log_path_str) = log_path.to_str() {
+            let _ = tauri_plugin_opener::open_path(log_path_str, None::<&str>);
+        }
+    }
 }
 fn on_restart_click(app: &AppHandle) {
     info!("============== Restart App ==============");
