@@ -5,7 +5,7 @@
 > 🌈 一个跨平台的划词翻译软件
 
 ![License](https://img.shields.io/github/license/allentown521/saladict.svg)
-![Tauri](https://img.shields.io/badge/Tauri-1.6.8-blue?logo=tauri)
+![Tauri](https://img.shields.io/badge/Tauri-2.x-blue?logo=tauri)
 ![JavaScript](https://img.shields.io/badge/-JavaScript-yellow?logo=javascript&logoColor=white)
 ![Rust](https://img.shields.io/badge/-Rust-orange?logo=rust&logoColor=white)
 ![Windows](https://img.shields.io/badge/-Windows-blue?logo=windows&logoColor=white)
@@ -435,7 +435,14 @@ Rust >= 1.80.0
 3. 安装依赖(仅 Linux 需要)
 
     ```bash
-    sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev libxcb1 libxrandr2 libdbus-1-3
+    # Debian/Ubuntu
+    sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev libxcb1 libxrandr2 libdbus-1-3 libssl-dev libsoup-3.0-dev
+    ```
+
+    NixOS 用户可以直接使用项目自带的 `shell.nix`:
+
+    ```bash
+    nix-shell
     ```
 
 4. 开发调试
