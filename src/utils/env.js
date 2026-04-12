@@ -11,7 +11,8 @@ export let appName = '';
 const osTypeMap = { 'linux': 'Linux', 'macos': 'Darwin', 'windows': 'Windows_NT' };
 
 export async function initEnv() {
-    osType = osTypeMap[type()] || type();
+    const rawType = type();
+    osType = osTypeMap[rawType] || rawType;
     arch = archFn();
     osVersion = version();
     appVersion = await getVersion();
