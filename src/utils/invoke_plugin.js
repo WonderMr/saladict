@@ -2,7 +2,7 @@ import { appCacheDir, appConfigDir, join } from "@tauri-apps/api/path";
 import { readFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { invoke } from "@tauri-apps/api/core";
 import Database from "@tauri-apps/plugin-sql";
-import { fetch } from "@tauri-apps/plugin-http";
+import { fetch, Body, ResponseType } from "./http";
 import CryptoJS from "crypto-js";
 import { osType } from "./env";
 
@@ -22,7 +22,7 @@ export async function invoke_plugin(pluginType, pluginName) {
     }
     const utils = {
         tauriFetch: fetch,
-        http: { fetch },
+        http: { fetch, Body, ResponseType },
         readBinaryFile: readFile,
         readTextFile,
         Database,

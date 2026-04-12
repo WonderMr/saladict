@@ -57,8 +57,6 @@ Saladict is a fork of Pot Translation. Since Pot Translation is already excellen
 
 # Usage
 
-</div>
-
 | Selection Translation | Input Translation | External Calls |
 | --- | --- | --- |
 | Select text and press the shortcut or click the quick translation icon | Press the input translation shortcut to open the translation window, enter text and press Enter | Integrate with other software for a more efficient workflow, see [External Calls](#external-calls) |
@@ -68,8 +66,6 @@ Saladict is a fork of Pot Translation. Since Pot Translation is already excellen
 | --- | --- | --- |
 | Right-click the tray icon and select `Clipboard Listening` to start. Copied text will be translated automatically. | Press the Screenshot OCR shortcut and select the area to recognize | Press the Screenshot Translation shortcut and select the area to translate |
 | <img src="asset/eg4.gif"/> | <img src="asset/eg5.gif"/> | <img src="asset/eg6.gif"/> |
-
-</div>
 
 <div align="center">
 
