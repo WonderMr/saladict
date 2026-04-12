@@ -308,7 +308,7 @@ GET "/ocr_translate?screenshot=true" => 截图翻译,
 ### 调用流程
 
 1. 使用其他截图工具截图
-2. 将截图保存在 `$CACHE/allen.town.focus.saladict/Saladict_screenshot_cut.png`
+2. 将截图保存在 `$CACHE/allen.town.focus.saladict/pot_screenshot_cut.png`
 3. 向`127.0.0.1:port/ocr_recognize?screenshot=false`发送请求即可调用成功
 
 > `$CACHE`为系统缓存目录，例如在 Windows 上为`C:\Users\{用户名}\AppData\Local\allen.town.focus.saladict\pot_screenshot_cut.png`

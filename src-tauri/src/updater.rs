@@ -13,7 +13,7 @@ pub fn check_update(app_handle: tauri::AppHandle) {
     if enable {
         tauri::async_runtime::spawn(async move {
             use tauri_plugin_updater::UpdaterExt;
-            match app_handle.updater().and_then(|u| Ok(u)) {
+            match app_handle.updater() {
                 Ok(updater) => {
                     match updater.check().await {
                         Ok(Some(update)) => {
