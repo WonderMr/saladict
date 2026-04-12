@@ -317,9 +317,9 @@ jobs:
                   $env:TAURI_PRIVATE_KEY="${{ secrets.TAURI_PRIVATE_KEY }}"
                   $env:TAURI_KEY_PASSWORD="${{ secrets.TAURI_KEY_PASSWORD }}"
                   if ("${{ matrix.target }}" -eq "x86_64-pc-windows-msvc") {
-                      pnpm tauri build -b nsis,msi,updater --target ${{ matrix.target }}
+                      pnpm tauri build -b nsis,msi --target ${{ matrix.target }}
                   } else {
-                      pnpm tauri build -b nsis,updater --target ${{ matrix.target }}
+                      pnpm tauri build -b nsis --target ${{ matrix.target }}
                   }
             - name: Upload Artifacts
               uses: actions/upload-artifact@v4
@@ -395,7 +395,7 @@ jobs:
               run: |
                   $env:TAURI_PRIVATE_KEY="${{ secrets.TAURI_PRIVATE_KEY }}"
                   $env:TAURI_KEY_PASSWORD="${{ secrets.TAURI_KEY_PASSWORD }}"
-                  pnpm tauri build -b nsis,updater --target ${{ matrix.target }}
+                  pnpm tauri build -b nsis --target ${{ matrix.target }}
                   Rename-Item .\src-tauri\target\${{ matrix.target }}\release\bundle\nsis\saladict_${{needs.change-version.outputs.version}}_${{ matrix.arch }}-setup.exe saladict_${{needs.change-version.outputs.version}}_${{ matrix.arch }}_fix_webview2_runtime-setup.exe
                   Rename-Item .\src-tauri\target\${{ matrix.target }}\release\bundle\nsis\saladict_${{needs.change-version.outputs.version}}_${{ matrix.arch }}-setup.nsis.zip saladict_${{needs.change-version.outputs.version}}_${{ matrix.arch }}_fix_webview2_runtime-setup.nsis.zip
                   Rename-Item .\src-tauri\target\${{ matrix.target }}\release\bundle\nsis\saladict_${{needs.change-version.outputs.version}}_${{ matrix.arch }}-setup.nsis.zip.sig saladict_${{needs.change-version.outputs.version}}_${{ matrix.arch }}_fix_webview2_runtime-setup.nsis.zip.sig
@@ -493,110 +493,110 @@ jobs:
                   token: ${{ secrets.GITHUB_TOKEN }}
                   files: src-tauri/target/${{ matrix.target }}/release/bundle/rpm/*.rpm
 
-    trigger-docs-update:
-        needs: [build-for-macos, build-for-windows, build-for-linux]
-        runs-on: ubuntu-latest
-        if: startsWith(github.ref, 'refs/tags')
-        steps:
-            - name: Trigger update
-              run: |
-                  curl -X POST https://api.github.com/repos/allentown521/saladict-desktop-docs/dispatches \
-                    -H "Accept: application/vnd.github.everest-preview+json" \
-                    -H "Authorization: token ${{ secrets.TOKEN }}" \
-                    -d '{"event_type": "plugins-updated"}'
+    # trigger-docs-update:
+    #     needs: [build-for-macos, build-for-windows, build-for-linux]
+    #     runs-on: ubuntu-latest
+    #     if: startsWith(github.ref, 'refs/tags')
+    #     steps:
+    #         - name: Trigger update
+    #           run: |
+    #               curl -X POST https://api.github.com/repos/allentown521/saladict-desktop-docs/dispatches \
+    #                 -H "Accept: application/vnd.github.everest-preview+json" \
+    #                 -H "Authorization: token ${{ secrets.TOKEN }}" \
+    #                 -d '{"event_type": "plugins-updated"}'
 
-    release-update:
-        needs: [build-for-macos, build-for-windows, build-for-linux, build-for-windows-fix-runtime]
-        runs-on: ubuntu-latest
-        if: startsWith(github.ref, 'refs/tags')
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
-            - name: Install git
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y git curl
-            - name: Get Tag Name
-              run: |
-                  echo "VERSION=$(git describe --tags | sed 's/-[0-9]*-.*//g')" >> $GITHUB_ENV
-                  echo "VERSION=$(git describe --tags | sed 's/-[0-9]*-.*//g')"
-            - name: Setup pnpm
-              uses: pnpm/action-setup@v4
-              with:
-                  version: 9
-            - name: pnpm install
-              run: pnpm install
-            - name: Release updater file
-              run: |
-                  pnpm run updater
-                  pnpm run updater:fixRuntime
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            - name: Upload Release
-              uses: softprops/action-gh-release@v1
-              with:
-                  body: ${{env.VERSION}}
-                  tag_name: updater
-                  token: ${{ secrets.GITHUB_TOKEN }}
-                  files: |
-                      update.json
-                      update-fix-runtime.json
+    # release-update:
+    #     needs: [build-for-macos, build-for-windows, build-for-linux, build-for-windows-fix-runtime]
+    #     runs-on: ubuntu-latest
+    #     if: startsWith(github.ref, 'refs/tags')
+    #     steps:
+    #         - name: Checkout repository
+    #           uses: actions/checkout@v4
+    #           with:
+    #               fetch-depth: 0
+    #         - name: Install git
+    #           run: |
+    #               sudo apt-get update
+    #               sudo apt-get install -y git curl
+    #         - name: Get Tag Name
+    #           run: |
+    #               echo "VERSION=$(git describe --tags | sed 's/-[0-9]*-.*//g')" >> $GITHUB_ENV
+    #               echo "VERSION=$(git describe --tags | sed 's/-[0-9]*-.*//g')"
+    #         - name: Setup pnpm
+    #           uses: pnpm/action-setup@v4
+    #           with:
+    #               version: 9
+    #         - name: pnpm install
+    #           run: pnpm install
+    #         - name: Release updater file
+    #           run: |
+    #               pnpm run updater
+    #               pnpm run updater:fixRuntime
+    #           env:
+    #               GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    #         - name: Upload Release
+    #           uses: softprops/action-gh-release@v1
+    #           with:
+    #               body: ${{env.VERSION}}
+    #               tag_name: updater
+    #               token: ${{ secrets.GITHUB_TOKEN }}
+    #               files: |
+    #                   update.json
+    #                   update-fix-runtime.json
 
-    homebrew:
-        name: Update Homebrew cask
-        needs: build-for-macos
-        runs-on: macos-latest
-        if: startsWith(github.ref, 'refs/tags')
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
-            - name: Get Tag Name
-              run: |
-                  echo "VERSION=$(git describe --tags | sed 's/-[0-9]*-.*//g')" >> $GITHUB_ENV
-                  echo "VERSION=$(git describe --tags | sed 's/-[0-9]*-.*//g')"
-            - name: Set up Homebrew
-              uses: Homebrew/actions/setup-homebrew@master
-            - name: Set up Git
-              run: |
-                  # sudo apt-get install git -y
-                  git config --global user.email product@aichatone.com
-                  git config --global user.name saladict-app
-            - name: Update Homebrew cask
-              env:
-                  HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.TOKEN }}
-              run: |
-                  brew tap allentown521/homebrew-saladict
-                  brew update
-                  brew bump-cask-pr saladict --version ${{ env.VERSION }} --no-browse
+    # homebrew:
+    #     name: Update Homebrew cask
+    #     needs: build-for-macos
+    #     runs-on: macos-latest
+    #     if: startsWith(github.ref, 'refs/tags')
+    #     steps:
+    #         - name: Checkout repository
+    #           uses: actions/checkout@v4
+    #           with:
+    #               fetch-depth: 0
+    #         - name: Get Tag Name
+    #           run: |
+    #               echo "VERSION=$(git describe --tags | sed 's/-[0-9]*-.*//g')" >> $GITHUB_ENV
+    #               echo "VERSION=$(git describe --tags | sed 's/-[0-9]*-.*//g')"
+    #         - name: Set up Homebrew
+    #           uses: Homebrew/actions/setup-homebrew@master
+    #         - name: Set up Git
+    #           run: |
+    #               # sudo apt-get install git -y
+    #               git config --global user.email product@aichatone.com
+    #               git config --global user.name saladict-app
+    #         - name: Update Homebrew cask
+    #           env:
+    #               HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.TOKEN }}
+    #           run: |
+    #               brew tap allentown521/homebrew-saladict
+    #               brew update
+    #               brew bump-cask-pr saladict --version ${{ env.VERSION }} --no-browse
 
-    winget:
-        name: Update WinGet Package
-        needs: build-for-windows
-        runs-on: ubuntu-latest
-        if: startsWith(github.ref, 'refs/tags')
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
-            - name: Install git
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y git
-            - name: Get Tag Name
-              run: |
-                  echo "VERSION=$(git describe --tags | sed 's/-[0-9]*-.*//g')" >> $GITHUB_ENV
-                  echo "VERSION=$(git describe --tags | sed 's/-[0-9]*-.*//g')"
-            - name: Upload WinGet
-              if: startsWith(github.ref, 'refs/tags')
-              uses: vedantmgoyal2009/winget-releaser@v2
-              with:
-                  identifier: allentown521.Saladict
-                  version: ${{env.VERSION}}
-                  installers-regex: '\.exe$'
-                  token: ${{ secrets.TOKEN }}
-              continue-on-error: true
+    # winget:
+    #     name: Update WinGet Package
+    #     needs: build-for-windows
+    #     runs-on: ubuntu-latest
+    #     if: startsWith(github.ref, 'refs/tags')
+    #     steps:
+    #         - name: Checkout repository
+    #           uses: actions/checkout@v4
+    #           with:
+    #               fetch-depth: 0
+    #         - name: Install git
+    #           run: |
+    #               sudo apt-get update
+    #               sudo apt-get install -y git
+    #         - name: Get Tag Name
+    #           run: |
+    #               echo "VERSION=$(git describe --tags | sed 's/-[0-9]*-.*//g')" >> $GITHUB_ENV
+    #               echo "VERSION=$(git describe --tags | sed 's/-[0-9]*-.*//g')"
+    #         - name: Upload WinGet
+    #           if: startsWith(github.ref, 'refs/tags')
+    #           uses: vedantmgoyal2009/winget-releaser@v2
+    #           with:
+    #               identifier: allentown521.Saladict
+    #               version: ${{env.VERSION}}
+    #               installers-regex: '\.exe$'
+    #               token: ${{ secrets.TOKEN }}
+    #           continue-on-error: true
