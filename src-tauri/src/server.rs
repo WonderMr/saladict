@@ -1,5 +1,6 @@
 use crate::config::{get, set};
 use crate::window::*;
+use crate::APP;
 use log::{info, warn};
 use std::thread;
 use tiny_http::{Request, Response, Server};
@@ -17,6 +18,14 @@ pub fn start_server() {
             Ok(v) => v,
             Err(e) => {
                 warn!("Server start failed: {}", e);
+                if let Some(app_handle) = APP.get() {
+                    use tauri_plugin_notification::NotificationExt;
+                    let _ = app_handle.notification()
+                        .builder()
+                        .title("Server start failed")
+                        .body("Please change Server Port and restart the application")
+                        .show();
+                }
                 return;
             }
         };
