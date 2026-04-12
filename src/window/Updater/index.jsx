@@ -86,7 +86,7 @@ export default function Updater() {
                         if (isForceUpdate) {
                             appWindow.setClosable(false);
                             // listen window created event, close all other windows except updater
-                            const unlisten = await listen('tauri://window-created', async () => {
+                            await listen('tauri://window-created', async () => {
                                 const windows = await getAllWindows();
                                 for (const window of windows) {
                                     if (window.label !== UPDATE_WINDOW_LABEL) {

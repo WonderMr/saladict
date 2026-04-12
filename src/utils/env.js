@@ -7,8 +7,11 @@ export let osVersion = '';
 export let appVersion = '';
 export let appName = '';
 
+// Map v2 plugin-os type() values to v1 values used throughout the codebase
+const osTypeMap = { 'linux': 'Linux', 'macos': 'Darwin', 'windows': 'Windows_NT' };
+
 export async function initEnv() {
-    osType = type();
+    osType = osTypeMap[type()] || type();
     arch = archFn();
     osVersion = version();
     appVersion = await getVersion();
