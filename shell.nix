@@ -47,5 +47,19 @@ pkgs.mkShell {
 
   shellHook = ''
     export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules"
+    # Workarounds for webkit2gtk-4.1 issues on NixOS
+    export GDK_BACKEND=x11              # Wayland protocol error 71 on multi-window
+    export WEBKIT_DISABLE_DMABUF_RENDERER=1  # GBM buffer allocation failure
+    export WEBKIT_DISABLE_COMPOSITING_MODE=1 # Additional rendering stability
+    export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [
+      pkgs.webkitgtk_4_1
+      pkgs.libsoup_3
+      pkgs.gtk3
+      pkgs.glib
+      pkgs.openssl
+      pkgs.dbus
+      pkgs.libayatana-appindicator
+      pkgs.xdotool
+    ]}:$LD_LIBRARY_PATH"
   '';
 }

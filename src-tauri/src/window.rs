@@ -81,7 +81,8 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
     match app_handle.get_webview_window(label) {
         Some(v) => {
             info!("Window existence: {}", label);
-            v.set_focus().unwrap();
+            let _ = v.show();
+            let _ = v.set_focus();
             (v, true)
         }
         None => {
@@ -94,11 +95,16 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
                 label,
                 WebviewUrl::App("index.html".into()),
             )
-            .position(position.x.into(), position.y.into())
             .focused(true)
-            .title(title)
-            .visible(false)
-            .skip_taskbar(hide_dock_icon);
+            .title(title);
+
+            #[cfg(not(target_os = "linux"))]
+            {
+                builder = builder
+                    .position(position.x.into(), position.y.into())
+                    .visible(false)
+                    .skip_taskbar(hide_dock_icon);
+            }
 
             #[cfg(target_os = "macos")]
             {
@@ -106,7 +112,7 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
                     .title_bar_style(tauri::TitleBarStyle::Overlay)
                     .hidden_title(true);
             }
-            #[cfg(not(target_os = "macos"))]
+            #[cfg(target_os = "windows")]
             {
                 builder = builder.transparent(true).decorations(false);
             }
@@ -116,7 +122,11 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
                 #[cfg(not(target_os = "linux"))]
                 set_shadow(&window, true).unwrap_or_default();
             }
-            let _ = window.current_monitor();
+            #[cfg(not(target_os = "linux"))]
+            {
+                let _ = window.current_monitor();
+                window.show().unwrap();
+            }
             (window, false)
         }
     }
@@ -124,11 +134,10 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
 
 pub fn config_window() {
     let (window, _exists) = build_window("config", "Config");
-    window
-        .set_min_size(Some(tauri::LogicalSize::new(800, 400)))
-        .unwrap();
-    window.set_size(tauri::LogicalSize::new(800, 600)).unwrap();
-    window.center().unwrap();
+    let _ = window.set_min_size(Some(tauri::LogicalSize::new(800, 400)));
+    let _ = window.set_size(tauri::LogicalSize::new(800, 600));
+    #[cfg(not(target_os = "linux"))]
+    let _ = window.center();
 }
 
 pub fn translate_window() -> WebviewWindow {
@@ -262,7 +271,7 @@ pub fn input_translate() {
         None => "mouse".to_string(),
     };
     if position_type == "mouse" {
-        window.center().unwrap();
+        window.center().unwrap_or_default();
     }
 
     window.emit("new_text", "[INPUT_TRANSLATE]").unwrap();
@@ -317,7 +326,7 @@ pub fn recognize_window() {
             (height as f64) * dpi,
         ))
         .unwrap();
-    window.center().unwrap();
+    window.center().unwrap_or_default();
     window.emit("new_image", "").unwrap();
 }
 
@@ -416,7 +425,7 @@ pub fn updater_window() {
         .set_min_size(Some(tauri::LogicalSize::new(600, 400)))
         .unwrap();
     window.set_size(tauri::LogicalSize::new(600, 400)).unwrap();
-    window.center().unwrap();
+    window.center().unwrap_or_default();
 }
 
 pub fn delete_thumb() {
@@ -586,7 +595,7 @@ pub fn notify_window(content: &str) {
     };
 
     window.set_size(tauri::LogicalSize::new(400, 400)).unwrap();
-    window.center().unwrap();
+    window.center().unwrap_or_default();
     window.set_maximizable(false).unwrap();
     window.set_minimizable(false).unwrap();
     window.set_always_on_top(true).unwrap();

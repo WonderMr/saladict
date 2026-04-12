@@ -63,9 +63,7 @@ export default function App() {
     const { setTheme } = useTheme();
     const { i18n } = useTranslation();
 
-    useEffect(() => {
-        store.load();
-    }, []);
+    // LazyStore auto-loads on first access, no explicit load() needed
 
     useEffect(() => {
         if (devMode !== null && devMode) {

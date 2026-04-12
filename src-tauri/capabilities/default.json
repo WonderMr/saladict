@@ -45,6 +45,11 @@
         "fs:allow-mkdir",
         "fs:allow-remove",
         "fs:allow-watch",
+        "fs:scope-appconfig-recursive",
+        "fs:scope-appcache-recursive",
+        "fs:scope-appdata-recursive",
+        "fs:scope-applog-recursive",
+        "fs:scope-home-recursive",
         "clipboard-manager:default",
         "clipboard-manager:allow-read-text",
         "clipboard-manager:allow-read-image",
@@ -56,6 +61,10 @@
         "http:allow-fetch-cancel",
         "http:allow-fetch-read-body",
         "http:allow-fetch-send",
+        {
+            "identifier": "http:default",
+            "allow": [{ "url": "http://**" }, { "url": "https://**" }]
+        },
         "notification:default",
         "notification:allow-notify",
         "notification:allow-is-permission-granted",
