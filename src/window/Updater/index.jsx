@@ -270,7 +270,7 @@ export default function Updater() {
                         {isAppStore
                             ? t('updater.open_app_store')
                             : downloaded !== 0
-                                ? downloaded > total
+                                ? (total > 0 && downloaded > total)
                                     ? t('updater.installing')
                                     : t('updater.downloading')
                                 : t('updater.update')}

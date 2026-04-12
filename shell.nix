@@ -42,6 +42,7 @@ pkgs.mkShell {
 
     # Build tools
     dpkg
+    patchelf
   ];
 
   shellHook = ''
