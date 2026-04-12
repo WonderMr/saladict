@@ -166,11 +166,11 @@ export default function Translate() {
         let temp = {};
         for (const serviceType of serviceTypeList) {
             temp[serviceType] = {};
-            if (await exists(`plugins/${serviceType}`, { dir: BaseDirectory.AppConfig })) {
-                const plugins = await readDir(`plugins/${serviceType}`, { dir: BaseDirectory.AppConfig });
+            if (await exists(`plugins/${serviceType}`, { baseDir: BaseDirectory.AppConfig })) {
+                const plugins = await readDir(`plugins/${serviceType}`, { baseDir: BaseDirectory.AppConfig });
                 for (const plugin of plugins) {
                     const infoStr = await readTextFile(`plugins/${serviceType}/${plugin.name}/info.json`, {
-                        dir: BaseDirectory.AppConfig,
+                        baseDir: BaseDirectory.AppConfig,
                     });
                     let pluginInfo = JSON.parse(infoStr);
                     if ('icon' in pluginInfo) {

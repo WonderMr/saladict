@@ -21,8 +21,29 @@ export class Body {
         return new Body(data);
     }
 
-    static form(data: Record<string, string>): Body {
-        return new Body(new URLSearchParams(data).toString(), 'application/x-www-form-urlencoded');
+    static form(data: Record<string, any>): Body {
+        // Detect if any value is a file-like object (has file/mime/fileName properties)
+        const hasFileFields = Object.values(data).some(
+            (v) => v !== null && typeof v === 'object' && 'file' in v
+        );
+
+        if (hasFileFields) {
+            // Build multipart FormData for file uploads
+            const formData = new FormData();
+            for (const [key, value] of Object.entries(data)) {
+                if (value !== null && typeof value === 'object' && 'file' in value) {
+                    const blob = new Blob([value.file], { type: value.mime || 'application/octet-stream' });
+                    formData.append(key, blob, value.fileName || key);
+                } else {
+                    formData.append(key, String(value));
+                }
+            }
+            // Don't set Content-Type — browser/runtime sets multipart boundary automatically
+            return new Body(formData);
+        }
+
+        // Simple form-urlencoded
+        return new Body(new URLSearchParams(data as Record<string, string>).toString(), 'application/x-www-form-urlencoded');
     }
 
     get content(): BodyInit { return this._content; }
@@ -72,9 +93,16 @@ export async function fetch<T = any>(url: string, options?: V1FetchOptions): Pro
         body = options?.body as BodyInit | undefined;
     }
 
+    // Merge headers, but remove Content-Type for FormData (browser sets multipart boundary)
+    const mergedHeaders: Record<string, string> = { ...extraHeaders, ...options?.headers };
+    if (body instanceof FormData) {
+        delete mergedHeaders['Content-Type'];
+        delete mergedHeaders['content-type'];
+    }
+
     const response = await pluginFetch(fullUrl, {
         method: options?.method || 'GET',
-        headers: { ...extraHeaders, ...options?.headers },
+        headers: mergedHeaders,
         body,
     });
 

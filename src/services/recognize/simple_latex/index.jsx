@@ -8,7 +8,7 @@ export async function recognize(base64, language, options = {}) {
 
     const url = 'https://server.simpletex.cn/api/latex_ocr/v2';
 
-    let file = await readFile('pot_screenshot_cut.png', { dir: BaseDirectory.AppCache });
+    let file = await readFile('pot_screenshot_cut.png', { baseDir: BaseDirectory.AppCache });
 
     const res = await fetch(url, {
         method: 'POST',

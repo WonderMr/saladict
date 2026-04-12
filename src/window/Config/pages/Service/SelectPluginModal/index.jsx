@@ -70,7 +70,7 @@ export default function SelectPluginModal(props) {
                                             variant='flat'
                                             onPress={() => {
                                                 remove(`plugins/${pluginType}/${x}`, {
-                                                    dir: BaseDirectory.AppConfig,
+                                                    baseDir: BaseDirectory.AppConfig,
                                                     recursive: true,
                                                 }).then(
                                                     (v) => {
