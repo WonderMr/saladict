@@ -112,11 +112,17 @@ export async function fetch<T = any>(url: string, options?: V1FetchOptions): Pro
         delete mergedHeaders['content-type'];
     }
 
-    const response = await pluginFetch(fullUrl, {
-        method: options?.method || 'GET',
-        headers: mergedHeaders,
-        body,
-    });
+    let response: Response;
+    try {
+        response = await pluginFetch(fullUrl, {
+            method: options?.method || 'GET',
+            headers: mergedHeaders,
+            body,
+        });
+    } catch (e) {
+        console.error('[http.ts] fetch failed:', fullUrl, e);
+        throw e;
+    }
 
     let data: any;
     const responseType = options?.responseType;
