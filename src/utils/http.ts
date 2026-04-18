@@ -8,7 +8,10 @@ function redactUrlForLog(url: string): string {
         const u = new URL(url);
         return `${u.origin}${u.pathname}`;
     } catch {
-        return '[unparseable url]';
+        // Relative URLs and non-standard schemes don't parse with `new URL()`.
+        // Still strip the query string and fragment so secrets passed via
+        // query params don't reach the log, while keeping the path for debugging.
+        return url.split('#')[0].split('?')[0];
     }
 }
 

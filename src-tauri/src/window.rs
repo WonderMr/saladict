@@ -84,7 +84,9 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
     match app_handle.get_webview_window(label) {
         Some(v) => {
             info!("Window existence: {}", label);
-            let _ = v.show();
+            // show() is intentionally not called here — callers may re-center
+            // or re-size before the window becomes visible. set_focus stays
+            // because it doesn't affect position and brings the window to front.
             let _ = v.set_focus();
             (v, true)
         }
@@ -357,6 +359,9 @@ pub fn image_translate() {
 pub fn recognize_window() {
     let (window, exists) = build_window("recognize", "Recognize");
     if exists {
+        if let Err(e) = window.show() {
+            warn!("recognize_window: show() failed: {:?}", e);
+        }
         window.emit("new_image", "").unwrap();
         return;
     }
@@ -519,7 +524,9 @@ pub fn delete_thumb() {
     match APP.get() {
         Some(handle) => match handle.get_webview_window(THUMB_WIN_NAME) {
             Some(window) => {
-                window.close().unwrap();
+                if let Err(e) = window.close() {
+                    warn!("delete_thumb: close() failed: {:?}", e);
+                }
             }
             None => {}
         },
@@ -531,11 +538,15 @@ pub fn close_thumb() {
     match APP.get() {
         Some(handle) => match handle.get_webview_window(THUMB_WIN_NAME) {
             Some(window) => {
-                window
-                    .set_position(LogicalPosition::new(-100.0, -100.0))
-                    .unwrap();
-                window.set_always_on_top(false).unwrap();
-                window.hide().unwrap();
+                if let Err(e) = window.set_position(LogicalPosition::new(-100.0, -100.0)) {
+                    warn!("close_thumb: set_position failed: {:?}", e);
+                }
+                if let Err(e) = window.set_always_on_top(false) {
+                    warn!("close_thumb: set_always_on_top failed: {:?}", e);
+                }
+                if let Err(e) = window.hide() {
+                    warn!("close_thumb: hide() failed: {:?}", e);
+                }
             }
             None => {}
         },
@@ -545,7 +556,9 @@ pub fn close_thumb() {
 
 pub fn show_thumb(x: i32, y: i32) {
     let window = get_thumb_window(x, y);
-    window.show().unwrap();
+    if let Err(e) = window.show() {
+        warn!("show_thumb: show() failed: {:?}", e);
+    }
 }
 
 pub fn get_thumb_window(x: i32, y: i32) -> WebviewWindow {
@@ -554,8 +567,12 @@ pub fn get_thumb_window(x: i32, y: i32) -> WebviewWindow {
     let window = match handle.get_webview_window(THUMB_WIN_NAME) {
         Some(window) => {
             info!("Thumb window already exists");
-            window.unminimize().unwrap();
-            window.set_always_on_top(true).unwrap();
+            if let Err(e) = window.unminimize() {
+                warn!("get_thumb_window: unminimize failed: {:?}", e);
+            }
+            if let Err(e) = window.set_always_on_top(true) {
+                warn!("get_thumb_window: set_always_on_top failed: {:?}", e);
+            }
             window
         }
         None => {
@@ -596,38 +613,45 @@ pub fn get_thumb_window(x: i32, y: i32) -> WebviewWindow {
             let window = {
                 let window = build_window(THUMB_WIN_NAME, THUMB_WIN_NAME).0;
                 set_shadow(&window, false).unwrap_or_default();
-                window.set_resizable(false).unwrap();
-                window.set_skip_taskbar(true).unwrap();
-                window
-                    .set_size(tauri::LogicalSize {
-                        width: 20.0,
-                        height: 20.0,
-                    })
-                    .unwrap();
+                if let Err(e) = window.set_resizable(false) {
+                    warn!("get_thumb_window: set_resizable failed: {:?}", e);
+                }
+                if let Err(e) = window.set_skip_taskbar(true) {
+                    warn!("get_thumb_window: set_skip_taskbar failed: {:?}", e);
+                }
+                if let Err(e) = window.set_size(tauri::LogicalSize {
+                    width: 20.0,
+                    height: 20.0,
+                }) {
+                    warn!("get_thumb_window: set_size failed: {:?}", e);
+                }
                 window
             };
 
             post_process_window(&window);
-            window.unminimize().unwrap();
-            window.set_always_on_top(true).unwrap();
+            if let Err(e) = window.unminimize() {
+                warn!("get_thumb_window: unminimize failed: {:?}", e);
+            }
+            if let Err(e) = window.set_always_on_top(true) {
+                warn!("get_thumb_window: set_always_on_top failed: {:?}", e);
+            }
             window
         }
     };
 
-    if cfg!(target_os = "macos") {
-        window
-            .set_position(LogicalPosition::new(
-                x as f64 + position_offset,
-                y as f64 + position_offset,
-            ))
-            .unwrap();
+    let set_position_result = if cfg!(target_os = "macos") {
+        window.set_position(LogicalPosition::new(
+            x as f64 + position_offset,
+            y as f64 + position_offset,
+        ))
     } else {
-        window
-            .set_position(PhysicalPosition::new(
-                x as f64 + position_offset,
-                y as f64 + position_offset,
-            ))
-            .unwrap();
+        window.set_position(PhysicalPosition::new(
+            x as f64 + position_offset,
+            y as f64 + position_offset,
+        ))
+    };
+    if let Err(e) = set_position_result {
+        warn!("get_thumb_window: set_position failed: {:?}", e);
     }
 
     window
