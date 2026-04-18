@@ -659,7 +659,10 @@ pub fn notify_window(content: &str) {
     };
 
     window.set_size(tauri::LogicalSize::new(400, 400)).unwrap();
-    window.center().unwrap_or_default();
+    #[cfg(not(target_os = "linux"))]
+    if let Err(e) = window.center() {
+        warn!("notify_window: center() failed: {:?}", e);
+    }
     window.set_maximizable(false).unwrap();
     window.set_minimizable(false).unwrap();
     window.set_always_on_top(true).unwrap();
