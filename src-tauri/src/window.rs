@@ -274,10 +274,9 @@ pub fn translate_window() -> WebviewWindow {
         }
     }
 
-    if let Err(e) = window.show() {
-        warn!("translate_window: show() failed: {:?}", e);
-    }
-
+    // show() is intentionally not called here — callers (e.g. input_translate)
+    // may re-center the window and must do so before it becomes visible to
+    // avoid a flash from the mouse position to the screen center.
     window
 }
 
@@ -293,6 +292,9 @@ pub fn selection_translate() {
     }
 
     let window = translate_window();
+    if let Err(e) = window.show() {
+        warn!("selection_translate: show() failed: {:?}", e);
+    }
     window.emit("new_text", text).unwrap();
 }
 
@@ -318,6 +320,9 @@ pub fn input_translate() {
             }
         }
     }
+    if let Err(e) = window.show() {
+        warn!("input_translate: show() failed: {:?}", e);
+    }
 
     window.emit("new_text", "[INPUT_TRANSLATE]").unwrap();
 }
@@ -328,6 +333,9 @@ pub fn text_translate(text: String) {
     let state: tauri::State<StringWrapper> = app_handle.state();
     state.0.lock().unwrap().replace_range(.., &text);
     let window = translate_window();
+    if let Err(e) = window.show() {
+        warn!("text_translate: show() failed: {:?}", e);
+    }
     window.emit("new_text", text).unwrap();
 }
 
@@ -340,6 +348,9 @@ pub fn image_translate() {
         .unwrap()
         .replace_range(.., "[IMAGE_TRANSLATE]");
     let window = translate_window();
+    if let Err(e) = window.show() {
+        warn!("image_translate: show() failed: {:?}", e);
+    }
     window.emit("new_text", "[IMAGE_TRANSLATE]").unwrap();
 }
 
@@ -412,9 +423,9 @@ fn screenshot_window() -> WebviewWindow {
     if let Err(e) = window.set_always_on_top(true) {
         warn!("screenshot_window: set_always_on_top failed: {:?}", e);
     }
-    if let Err(e) = window.show() {
-        warn!("screenshot_window: show() failed: {:?}", e);
-    }
+    // show() is intentionally not called here — the React Screenshot
+    // component calls appWindow.show() in its img onLoad handler once
+    // pot_screenshot.png is loaded, to avoid a blank/white flash.
     window
 }
 
