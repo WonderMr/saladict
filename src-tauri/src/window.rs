@@ -22,6 +22,7 @@ use mouse_position::mouse_position::Mouse;
 use serde_json;
 
 pub const THUMB_WIN_NAME: &str = "thumb";// Get daemon window instance
+#[cfg(not(target_os = "linux"))]
 fn get_daemon_window() -> WebviewWindow {
     let app_handle = APP.get().unwrap();
     match app_handle.get_webview_window("daemon") {
@@ -121,16 +122,14 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
             let window = builder.build().unwrap();
 
             if label != "screenshot" {
-                #[cfg(not(target_os = "linux"))]
+                #[cfg(any(target_os = "macos", target_os = "windows"))]
                 set_shadow(&window, true).unwrap_or_default();
             }
+            // show() is intentionally not called here — callers apply sizing,
+            // positioning, and centering, and then show the window themselves
+            // so it doesn't flash at (0, 0) with default size on non-Linux.
             #[cfg(not(target_os = "linux"))]
-            {
-                let _ = window.current_monitor();
-                if let Err(e) = window.show() {
-                    warn!("build_window: show() failed for {}: {:?}", label, e);
-                }
-            }
+            let _ = window.current_monitor();
             (window, false)
         }
     }
@@ -145,8 +144,13 @@ pub fn config_window() {
         warn!("config_window: set_size failed: {:?}", e);
     }
     #[cfg(not(target_os = "linux"))]
-    if let Err(e) = window.center() {
-        warn!("config_window: center() failed: {:?}", e);
+    {
+        if let Err(e) = window.center() {
+            warn!("config_window: center() failed: {:?}", e);
+        }
+        if let Err(e) = window.show() {
+            warn!("config_window: show() failed: {:?}", e);
+        }
     }
 }
 
@@ -260,6 +264,11 @@ pub fn translate_window() -> WebviewWindow {
         }
     }
 
+    #[cfg(not(target_os = "linux"))]
+    if let Err(e) = window.show() {
+        warn!("translate_window: show() failed: {:?}", e);
+    }
+
     window
 }
 
@@ -288,12 +297,17 @@ pub fn input_translate() {
         .unwrap()
         .replace_range(.., "[INPUT_TRANSLATE]");
     let window = translate_window();
-    let position_type = match get("translate_window_position") {
-        Some(v) => v.as_str().unwrap().to_string(),
-        None => "mouse".to_string(),
-    };
-    if position_type == "mouse" {
-        window.center().unwrap_or_default();
+    #[cfg(not(target_os = "linux"))]
+    {
+        let position_type = match get("translate_window_position") {
+            Some(v) => v.as_str().unwrap().to_string(),
+            None => "mouse".to_string(),
+        };
+        if position_type == "mouse" {
+            if let Err(e) = window.center() {
+                warn!("input_translate: center() failed: {:?}", e);
+            }
+        }
     }
 
     window.emit("new_text", "[INPUT_TRANSLATE]").unwrap();
@@ -354,7 +368,15 @@ pub fn recognize_window() {
     )) {
         warn!("recognize_window: set_size failed: {:?}", e);
     }
-    window.center().unwrap_or_default();
+    #[cfg(not(target_os = "linux"))]
+    {
+        if let Err(e) = window.center() {
+            warn!("recognize_window: center() failed: {:?}", e);
+        }
+        if let Err(e) = window.show() {
+            warn!("recognize_window: show() failed: {:?}", e);
+        }
+    }
     window.emit("new_image", "").unwrap();
 }
 
@@ -382,6 +404,10 @@ fn screenshot_window() -> WebviewWindow {
 
     if let Err(e) = window.set_always_on_top(true) {
         warn!("screenshot_window: set_always_on_top failed: {:?}", e);
+    }
+    #[cfg(not(target_os = "linux"))]
+    if let Err(e) = window.show() {
+        warn!("screenshot_window: show() failed: {:?}", e);
     }
     window
 }
@@ -463,7 +489,15 @@ pub fn updater_window() {
     if let Err(e) = window.set_size(tauri::LogicalSize::new(600, 400)) {
         warn!("updater_window: set_size failed: {:?}", e);
     }
-    window.center().unwrap_or_default();
+    #[cfg(not(target_os = "linux"))]
+    {
+        if let Err(e) = window.center() {
+            warn!("updater_window: center() failed: {:?}", e);
+        }
+        if let Err(e) = window.show() {
+            warn!("updater_window: show() failed: {:?}", e);
+        }
+    }
 }
 
 pub fn delete_thumb() {
