@@ -63,7 +63,7 @@ fn get_daemon_window() -> WebviewWindow {
         Some(v) => v,
         None => {
             warn!("Daemon window not found, create new daemon window!");
-            #[allow(unused_mut)]
+            let wayland = is_wayland_session();
             let mut builder = WebviewWindowBuilder::new(
                 app_handle,
                 "daemon",
@@ -72,11 +72,11 @@ fn get_daemon_window() -> WebviewWindow {
             .title("Daemon");
             // visible(false) at build time trips Wayland Protocol Error 71;
             // on Wayland we build visible then hide immediately instead.
-            if !is_wayland_session() {
+            if !wayland {
                 builder = builder.visible(false);
             }
             let window = builder.build().unwrap();
-            if is_wayland_session() {
+            if wayland {
                 let _ = window.hide();
             }
             window
@@ -133,7 +133,6 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
         }
         None => {
             info!("Window not existence, Creating new window: {}", label);
-            #[allow(unused_mut)]
             let mut builder = WebviewWindowBuilder::new(
                 app_handle,
                 label,
@@ -298,11 +297,13 @@ pub fn translate_window() -> WebviewWindow {
                 }
             }
 
-            if let Err(e) = window.set_position(tauri::PhysicalPosition::new(
-                mouse_position.x,
-                mouse_position.y,
-            )) {
-                warn!("translate_window: set_position failed: {:?}", e);
+            if !is_wayland_session() {
+                if let Err(e) = window.set_position(tauri::PhysicalPosition::new(
+                    mouse_position.x,
+                    mouse_position.y,
+                )) {
+                    warn!("translate_window: set_position failed: {:?}", e);
+                }
             }
         }
         _ => {
@@ -314,11 +315,13 @@ pub fn translate_window() -> WebviewWindow {
                 Some(v) => v.as_i64().unwrap(),
                 None => 0,
             };
-            if let Err(e) = window.set_position(tauri::PhysicalPosition::new(
-                (position_x as f64) * dpi,
-                (position_y as f64) * dpi,
-            )) {
-                warn!("translate_window: set_position failed: {:?}", e);
+            if !is_wayland_session() {
+                if let Err(e) = window.set_position(tauri::PhysicalPosition::new(
+                    (position_x as f64) * dpi,
+                    (position_y as f64) * dpi,
+                )) {
+                    warn!("translate_window: set_position failed: {:?}", e);
+                }
             }
         }
     }
@@ -636,7 +639,6 @@ pub fn get_thumb_window(x: i32, y: i32) -> WebviewWindow {
 
             #[cfg(any(target_os = "macos", target_os = "linux"))]
             let window = {
-                #[allow(unused_mut)]
                 let mut builder = WebviewWindowBuilder::new(
                     handle,
                     THUMB_WIN_NAME,
