@@ -29,26 +29,33 @@ use serde_json;
 // override wins.
 #[cfg(target_os = "linux")]
 fn is_wayland_session() -> bool {
+    let wayland_available = std::env::var("WAYLAND_DISPLAY")
+        .map(|v| !v.is_empty())
+        .unwrap_or(false);
+    let x11_available = std::env::var("DISPLAY")
+        .map(|v| !v.is_empty())
+        .unwrap_or(false);
+
     if let Ok(backend) = std::env::var("GDK_BACKEND") {
         // GDK_BACKEND is a comma-separated priority list (e.g. "wayland,x11"
-        // means "prefer Wayland, fall back to X11"). GDK picks the first entry
-        // that's available, so only the primary selector should classify the
-        // session — substring matching would misread "wayland,x11" as X11.
-        let primary = backend
-            .split(',')
-            .next()
-            .unwrap_or("")
-            .trim()
-            .to_ascii_lowercase();
-        match primary.as_str() {
-            "x11" => return false,
-            "wayland" => return true,
-            _ => {}
+        // means "prefer Wayland, fall back to X11"). GDK walks it and picks
+        // the first entry whose display server is actually reachable, so we
+        // need to do the same to match the real selection: pair each entry
+        // with its corresponding display env var and return the first viable
+        // match. This correctly handles "x11,wayland" with no DISPLAY set
+        // (GTK falls back to Wayland) and "wayland,x11" with no
+        // WAYLAND_DISPLAY set (GTK falls back to X11).
+        for entry in backend.split(',').map(|s| s.trim().to_ascii_lowercase()) {
+            match entry.as_str() {
+                "x11" if x11_available => return false,
+                "wayland" if wayland_available => return true,
+                _ => {}
+            }
         }
     }
-    std::env::var("WAYLAND_DISPLAY")
-        .map(|v| !v.is_empty())
-        .unwrap_or(false)
+    // No GDK_BACKEND override, or none of the listed backends could connect:
+    // default to whichever display server is actually present.
+    wayland_available
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -470,15 +477,9 @@ fn screenshot_window() -> WebviewWindow {
             warn!("screenshot_window: set_skip_taskbar failed: {:?}", e);
         }
     }
-    #[cfg(target_os = "macos")]
-    {
-        let monitor = window.current_monitor().unwrap().unwrap();
-        let size = monitor.size();
-        window.set_decorations(false).unwrap();
-        window.set_size(*size).unwrap();
-    }
-
-    #[cfg(not(target_os = "macos"))]
+    // macOS uses its own /usr/sbin/screencapture pipeline in ocr_recognize /
+    // ocr_translate instead of this screenshot window, so the function itself
+    // is cfg-gated to non-macOS targets; no macOS-specific branch needed here.
     if let Err(e) = window.set_fullscreen(true) {
         warn!("screenshot_window: set_fullscreen failed: {:?}", e);
     }
@@ -754,13 +755,28 @@ pub fn get_mouse_location() -> Result<(i32, i32), String> {
 pub fn notify_window(content: &str) {
     let app_handle = APP.get().unwrap();
 
-    // Save content to file
-    let app_dir = app_handle.path().app_config_dir().unwrap();
-    let notify_file = app_dir.join("notify_content.json");
-    let content_json = serde_json::json!({
-        "content": content
-    });
-    std::fs::write(&notify_file, content_json.to_string()).unwrap();
+    // Persist the content so the notify window can pick it up on load.
+    // I/O failures (missing config dir, read-only filesystem, permission
+    // errors) are logged but not fatal — we still want to show the window.
+    match app_handle.path().app_config_dir() {
+        Ok(app_dir) => {
+            let notify_file = app_dir.join("notify_content.json");
+            let content_json = serde_json::json!({ "content": content });
+            if let Err(e) = std::fs::write(&notify_file, content_json.to_string()) {
+                warn!(
+                    "notify_window: failed to write {}: {:?}",
+                    notify_file.display(),
+                    e
+                );
+            }
+        }
+        Err(e) => {
+            warn!(
+                "notify_window: app_config_dir unavailable, skipping content persistence: {:?}",
+                e
+            );
+        }
+    }
 
     let window: WebviewWindow = match app_handle.get_webview_window("notify") {
         Some(v) => {
