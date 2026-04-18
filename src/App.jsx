@@ -11,7 +11,6 @@ import Translate from './window/Translate';
 import Recognize from './window/Recognize';
 import Updater from './window/Updater';
 import Notify from './window/Notify';
-import { store } from './utils/store';
 import Config from './window/Config';
 import { useConfig } from './hooks';
 import { uiLanguage } from './utils/language';
@@ -62,8 +61,6 @@ export default function App() {
     const [appFontSize] = useConfig('app_font_size', 16);
     const { setTheme } = useTheme();
     const { i18n } = useTranslation();
-
-    // LazyStore auto-loads on first access, no explicit load() needed
 
     useEffect(() => {
         if (devMode !== null && devMode) {

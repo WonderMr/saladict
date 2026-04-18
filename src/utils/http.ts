@@ -3,6 +3,15 @@ import { fetch as pluginFetch } from '@tauri-apps/plugin-http';
 export const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 export const DEFAULT_EDGE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36 Edg/113.0.1774.42';
 
+function redactUrlForLog(url: string): string {
+    try {
+        const u = new URL(url);
+        return `${u.origin}${u.pathname}`;
+    } catch {
+        return '[unparseable url]';
+    }
+}
+
 // V1-compatible Body class for Tauri v2 migration
 export class Body {
     private _content: BodyInit;
@@ -120,7 +129,8 @@ export async function fetch<T = any>(url: string, options?: V1FetchOptions): Pro
             body,
         });
     } catch (e) {
-        console.error('[http.ts] fetch failed:', fullUrl, e);
+        // Strip query string — some providers encode API keys there.
+        console.error('[http.ts] fetch failed:', redactUrlForLog(fullUrl), e);
         throw e;
     }
 

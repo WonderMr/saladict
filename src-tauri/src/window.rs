@@ -8,6 +8,7 @@ use log::{info, warn};
 use tauri::Emitter;
 use tauri::Listener;
 use tauri::Manager;
+#[cfg(not(target_os = "linux"))]
 use tauri::Monitor;
 use tauri::WebviewWindow;
 use tauri::WebviewWindowBuilder;
@@ -41,6 +42,7 @@ fn get_daemon_window() -> WebviewWindow {
 }
 
 // Get monitor where the mouse is currently located
+#[cfg(not(target_os = "linux"))]
 fn get_current_monitor(x: i32, y: i32) -> Monitor {
     info!("Mouse position: {}, {}", x, y);
     let daemon_window = get_daemon_window();
@@ -65,18 +67,6 @@ fn get_current_monitor(x: i32, y: i32) -> Monitor {
 
 // Creating a window on the mouse monitor
 fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
-    use mouse_position::mouse_position::{Mouse, Position};
-
-    let mouse_position = match Mouse::get_mouse_position() {
-        Mouse::Position { x, y } => Position { x, y },
-        Mouse::Error => {
-            warn!("Mouse position not found, using (0, 0) as default");
-            Position { x: 0, y: 0 }
-        }
-    };
-    let current_monitor = get_current_monitor(mouse_position.x, mouse_position.y);
-    let position = current_monitor.position();
-
     let app_handle = APP.get().unwrap();
     match app_handle.get_webview_window(label) {
         Some(v) => {
@@ -87,9 +77,7 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
         }
         None => {
             info!("Window not existence, Creating new window: {}", label);
-            let hide_dock_icon = get("hide_dock_icon")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true);
+            #[allow(unused_mut)]
             let mut builder = WebviewWindowBuilder::new(
                 app_handle,
                 label,
@@ -98,8 +86,22 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
             .focused(true)
             .title(title);
 
+            // Wayland rejects position/visible(false)/skip_taskbar at build time,
+            // so these are applied only on non-Linux targets.
             #[cfg(not(target_os = "linux"))]
             {
+                use mouse_position::mouse_position::{Mouse, Position};
+                let mouse_position = match Mouse::get_mouse_position() {
+                    Mouse::Position { x, y } => Position { x, y },
+                    Mouse::Error => {
+                        warn!("Mouse position not found, using (0, 0) as default");
+                        Position { x: 0, y: 0 }
+                    }
+                };
+                let position = get_current_monitor(mouse_position.x, mouse_position.y).position();
+                let hide_dock_icon = get("hide_dock_icon")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true);
                 builder = builder
                     .position(position.x.into(), position.y.into())
                     .visible(false)
@@ -125,7 +127,9 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
             #[cfg(not(target_os = "linux"))]
             {
                 let _ = window.current_monitor();
-                window.show().unwrap();
+                if let Err(e) = window.show() {
+                    warn!("build_window: show() failed for {}: {:?}", label, e);
+                }
             }
             (window, false)
         }
@@ -134,10 +138,16 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
 
 pub fn config_window() {
     let (window, _exists) = build_window("config", "Config");
-    let _ = window.set_min_size(Some(tauri::LogicalSize::new(800, 400)));
-    let _ = window.set_size(tauri::LogicalSize::new(800, 600));
+    if let Err(e) = window.set_min_size(Some(tauri::LogicalSize::new(800, 400))) {
+        warn!("config_window: set_min_size failed: {:?}", e);
+    }
+    if let Err(e) = window.set_size(tauri::LogicalSize::new(800, 600)) {
+        warn!("config_window: set_size failed: {:?}", e);
+    }
     #[cfg(not(target_os = "linux"))]
-    let _ = window.center();
+    if let Err(e) = window.center() {
+        warn!("config_window: center() failed: {:?}", e);
+    }
 }
 
 pub fn translate_window() -> WebviewWindow {
@@ -154,7 +164,11 @@ pub fn translate_window() -> WebviewWindow {
     if exists {
         return window;
     }
-    window.set_skip_taskbar(true).unwrap();
+    // Wayland Protocol Error 71: skip_taskbar is not supported there.
+    #[cfg(not(target_os = "linux"))]
+    if let Err(e) = window.set_skip_taskbar(true) {
+        warn!("translate_window: set_skip_taskbar failed: {:?}", e);
+    }
     // Get Translate Window Size
     let width = match get("translate_window_width") {
         Some(v) => v.as_i64().unwrap(),
@@ -171,15 +185,21 @@ pub fn translate_window() -> WebviewWindow {
         }
     };
 
-    let monitor = window.current_monitor().unwrap().unwrap();
-    let dpi = monitor.scale_factor();
+    let monitor = match window.current_monitor() {
+        Ok(m) => m,
+        Err(e) => {
+            warn!("translate_window: current_monitor failed: {:?}", e);
+            None
+        }
+    };
+    let dpi = monitor.as_ref().map(|m| m.scale_factor()).unwrap_or(1.0);
 
-    window
-        .set_size(tauri::PhysicalSize::new(
-            (width as f64) * dpi,
-            (height as f64) * dpi,
-        ))
-        .unwrap();
+    if let Err(e) = window.set_size(tauri::PhysicalSize::new(
+        (width as f64) * dpi,
+        (height as f64) * dpi,
+    )) {
+        warn!("translate_window: set_size failed: {:?}", e);
+    }
 
     let position_type = match get("translate_window_position") {
         Some(v) => v.as_str().unwrap().to_string(),
@@ -188,37 +208,39 @@ pub fn translate_window() -> WebviewWindow {
 
     match position_type.as_str() {
         "mouse" => {
-            // Adjust window position
-            let monitor_size = monitor.size();
-            let monitor_size_width = monitor_size.width as f64;
-            let monitor_size_height = monitor_size.height as f64;
-            let monitor_position = monitor.position();
-            let monitor_position_x = monitor_position.x as f64;
-            let monitor_position_y = monitor_position.y as f64;
+            // Clamp against monitor bounds when the monitor is known.
+            if let Some(monitor) = monitor.as_ref() {
+                let monitor_size = monitor.size();
+                let monitor_size_width = monitor_size.width as f64;
+                let monitor_size_height = monitor_size.height as f64;
+                let monitor_position = monitor.position();
+                let monitor_position_x = monitor_position.x as f64;
+                let monitor_position_y = monitor_position.y as f64;
 
-            if mouse_position.x as f64 + width as f64 * dpi
-                > monitor_position_x + monitor_size_width
-            {
-                mouse_position.x -= (width as f64 * dpi) as i32;
-                if (mouse_position.x as f64) < monitor_position_x {
-                    mouse_position.x = monitor_position_x as i32;
+                if mouse_position.x as f64 + width as f64 * dpi
+                    > monitor_position_x + monitor_size_width
+                {
+                    mouse_position.x -= (width as f64 * dpi) as i32;
+                    if (mouse_position.x as f64) < monitor_position_x {
+                        mouse_position.x = monitor_position_x as i32;
+                    }
+                }
+                if mouse_position.y as f64 + height as f64 * dpi
+                    > monitor_position_y + monitor_size_height
+                {
+                    mouse_position.y -= (height as f64 * dpi) as i32;
+                    if (mouse_position.y as f64) < monitor_position_y {
+                        mouse_position.y = monitor_position_y as i32;
+                    }
                 }
             }
-            if mouse_position.y as f64 + height as f64 * dpi
-                > monitor_position_y + monitor_size_height
-            {
-                mouse_position.y -= (height as f64 * dpi) as i32;
-                if (mouse_position.y as f64) < monitor_position_y {
-                    mouse_position.y = monitor_position_y as i32;
-                }
-            }
 
-            window
-                .set_position(tauri::PhysicalPosition::new(
-                    mouse_position.x,
-                    mouse_position.y,
-                ))
-                .unwrap();
+            if let Err(e) = window.set_position(tauri::PhysicalPosition::new(
+                mouse_position.x,
+                mouse_position.y,
+            )) {
+                warn!("translate_window: set_position failed: {:?}", e);
+            }
         }
         _ => {
             let position_x = match get("translate_window_position_x") {
@@ -229,12 +251,12 @@ pub fn translate_window() -> WebviewWindow {
                 Some(v) => v.as_i64().unwrap(),
                 None => 0,
             };
-            window
-                .set_position(tauri::PhysicalPosition::new(
-                    (position_x as f64) * dpi,
-                    (position_y as f64) * dpi,
-                ))
-                .unwrap();
+            if let Err(e) = window.set_position(tauri::PhysicalPosition::new(
+                (position_x as f64) * dpi,
+                (position_y as f64) * dpi,
+            )) {
+                warn!("translate_window: set_position failed: {:?}", e);
+            }
         }
     }
 
@@ -318,14 +340,20 @@ pub fn recognize_window() {
             400
         }
     };
-    let monitor = window.current_monitor().unwrap().unwrap();
-    let dpi = monitor.scale_factor();
-    window
-        .set_size(tauri::PhysicalSize::new(
-            (width as f64) * dpi,
-            (height as f64) * dpi,
-        ))
-        .unwrap();
+    let dpi = match window.current_monitor() {
+        Ok(Some(m)) => m.scale_factor(),
+        Ok(None) => 1.0,
+        Err(e) => {
+            warn!("recognize_window: current_monitor failed: {:?}", e);
+            1.0
+        }
+    };
+    if let Err(e) = window.set_size(tauri::PhysicalSize::new(
+        (width as f64) * dpi,
+        (height as f64) * dpi,
+    )) {
+        warn!("recognize_window: set_size failed: {:?}", e);
+    }
     window.center().unwrap_or_default();
     window.emit("new_image", "").unwrap();
 }
@@ -334,7 +362,11 @@ pub fn recognize_window() {
 fn screenshot_window() -> WebviewWindow {
     let (window, _exists) = build_window("screenshot", "Screenshot");
 
-    window.set_skip_taskbar(true).unwrap();
+    // Wayland Protocol Error 71: skip_taskbar is not supported there.
+    #[cfg(not(target_os = "linux"))]
+    if let Err(e) = window.set_skip_taskbar(true) {
+        warn!("screenshot_window: set_skip_taskbar failed: {:?}", e);
+    }
     #[cfg(target_os = "macos")]
     {
         let monitor = window.current_monitor().unwrap().unwrap();
@@ -344,9 +376,13 @@ fn screenshot_window() -> WebviewWindow {
     }
 
     #[cfg(not(target_os = "macos"))]
-    window.set_fullscreen(true).unwrap();
+    if let Err(e) = window.set_fullscreen(true) {
+        warn!("screenshot_window: set_fullscreen failed: {:?}", e);
+    }
 
-    window.set_always_on_top(true).unwrap();
+    if let Err(e) = window.set_always_on_top(true) {
+        warn!("screenshot_window: set_always_on_top failed: {:?}", e);
+    }
     window
 }
 
@@ -421,10 +457,12 @@ pub fn ocr_translate() {
 #[tauri::command(async)]
 pub fn updater_window() {
     let (window, _exists) = build_window("updater", "Updater");
-    window
-        .set_min_size(Some(tauri::LogicalSize::new(600, 400)))
-        .unwrap();
-    window.set_size(tauri::LogicalSize::new(600, 400)).unwrap();
+    if let Err(e) = window.set_min_size(Some(tauri::LogicalSize::new(600, 400))) {
+        warn!("updater_window: set_min_size failed: {:?}", e);
+    }
+    if let Err(e) = window.set_size(tauri::LogicalSize::new(600, 400)) {
+        warn!("updater_window: set_size failed: {:?}", e);
+    }
     window.center().unwrap_or_default();
 }
 
