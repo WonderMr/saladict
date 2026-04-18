@@ -407,6 +407,17 @@ pub fn recognize_window() {
 fn screenshot_window() -> WebviewWindow {
     let (window, _exists) = build_window("screenshot", "Screenshot");
 
+    // On Linux, build_window can't use visible(false) at build time (Wayland
+    // Protocol Error 71), so the window is visible immediately. Hide it right
+    // away so the subsequent screen.capture() call doesn't capture the blank
+    // fullscreen screenshot window itself. The React Screenshot component
+    // calls appWindow.show() in its img onLoad handler once the captured image
+    // is ready.
+    #[cfg(target_os = "linux")]
+    if let Err(e) = window.hide() {
+        warn!("screenshot_window: hide() failed: {:?}", e);
+    }
+
     // Wayland Protocol Error 71: skip_taskbar is not supported there.
     #[cfg(not(target_os = "linux"))]
     if let Err(e) = window.set_skip_taskbar(true) {
