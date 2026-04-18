@@ -8,7 +8,6 @@ use log::{info, warn};
 use tauri::Emitter;
 use tauri::Listener;
 use tauri::Manager;
-#[cfg(not(target_os = "linux"))]
 use tauri::Monitor;
 use tauri::WebviewWindow;
 use tauri::WebviewWindowBuilder;
@@ -21,29 +20,62 @@ use cocoa::appkit::NSWindow;
 use mouse_position::mouse_position::Mouse;
 use serde_json;
 
-pub const THUMB_WIN_NAME: &str = "thumb";// Get daemon window instance
+// Returns true only when the current process is actually talking to a Wayland
+// compositor. Several Tauri builder / window operations (visible(false),
+// skip_taskbar, .position(), set_skip_taskbar after build, center) trigger
+// Wayland Protocol Error 71 or are no-ops on Wayland, but work fine on X11
+// / XWayland / macOS / Windows. The dev shell pins GDK_BACKEND=x11 to force
+// XWayland even when WAYLAND_DISPLAY is set, so the explicit backend
+// override wins.
+#[cfg(target_os = "linux")]
+fn is_wayland_session() -> bool {
+    if let Ok(backend) = std::env::var("GDK_BACKEND") {
+        if backend.contains("x11") {
+            return false;
+        }
+        if backend.contains("wayland") {
+            return true;
+        }
+    }
+    std::env::var("WAYLAND_DISPLAY")
+        .map(|v| !v.is_empty())
+        .unwrap_or(false)
+}
+
 #[cfg(not(target_os = "linux"))]
+fn is_wayland_session() -> bool {
+    false
+}
+
+pub const THUMB_WIN_NAME: &str = "thumb";// Get daemon window instance
 fn get_daemon_window() -> WebviewWindow {
     let app_handle = APP.get().unwrap();
     match app_handle.get_webview_window("daemon") {
         Some(v) => v,
         None => {
             warn!("Daemon window not found, create new daemon window!");
-            WebviewWindowBuilder::new(
+            #[allow(unused_mut)]
+            let mut builder = WebviewWindowBuilder::new(
                 app_handle,
                 "daemon",
                 WebviewUrl::App("daemon.html".into()),
             )
-            .title("Daemon")
-            .visible(false)
-            .build()
-            .unwrap()
+            .title("Daemon");
+            // visible(false) at build time trips Wayland Protocol Error 71;
+            // on Wayland we build visible then hide immediately instead.
+            if !is_wayland_session() {
+                builder = builder.visible(false);
+            }
+            let window = builder.build().unwrap();
+            if is_wayland_session() {
+                let _ = window.hide();
+            }
+            window
         }
     }
 }
 
 // Get monitor where the mouse is currently located
-#[cfg(not(target_os = "linux"))]
 fn get_current_monitor(x: i32, y: i32) -> Option<Monitor> {
     info!("Mouse position: {}, {}", x, y);
     let daemon_window = get_daemon_window();
@@ -101,10 +133,11 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
             .focused(true)
             .title(title);
 
-            // Wayland rejects position/visible(false)/skip_taskbar at build time,
-            // so these are applied only on non-Linux targets.
-            #[cfg(not(target_os = "linux"))]
-            {
+            // Wayland rejects position/visible(false)/skip_taskbar at build
+            // time (Protocol Error 71). X11/XWayland/macOS/Windows accept
+            // them, so we gate at runtime rather than by compile-time cfg.
+            let wayland = is_wayland_session();
+            if !wayland {
                 use mouse_position::mouse_position::{Mouse, Position};
                 let mouse_position = match Mouse::get_mouse_position() {
                     Mouse::Position { x, y } => Position { x, y },
@@ -141,9 +174,14 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
             }
             // show() is intentionally not called here — callers apply sizing,
             // positioning, and centering, and then show the window themselves
-            // so it doesn't flash at (0, 0) with default size on non-Linux.
-            #[cfg(not(target_os = "linux"))]
-            let _ = window.current_monitor();
+            // so it doesn't flash at (0, 0) with default size. On Wayland we
+            // couldn't use visible(false) at builder time, so hide now to
+            // restore the same "invisible until caller shows" contract.
+            if wayland {
+                let _ = window.hide();
+            } else {
+                let _ = window.current_monitor();
+            }
             (window, false)
         }
     }
@@ -157,9 +195,10 @@ pub fn config_window() {
     if let Err(e) = window.set_size(tauri::LogicalSize::new(800, 600)) {
         warn!("config_window: set_size failed: {:?}", e);
     }
-    #[cfg(not(target_os = "linux"))]
-    if let Err(e) = window.center() {
-        warn!("config_window: center() failed: {:?}", e);
+    if !is_wayland_session() {
+        if let Err(e) = window.center() {
+            warn!("config_window: center() failed: {:?}", e);
+        }
     }
     if let Err(e) = window.show() {
         warn!("config_window: show() failed: {:?}", e);
@@ -177,13 +216,12 @@ pub fn translate_window() -> WebviewWindow {
         }
     };
     let (window, exists) = build_window("translate", "Translate");
-    if exists {
-        return window;
-    }
     // Wayland Protocol Error 71: skip_taskbar is not supported there.
-    #[cfg(not(target_os = "linux"))]
-    if let Err(e) = window.set_skip_taskbar(true) {
-        warn!("translate_window: set_skip_taskbar failed: {:?}", e);
+    // Applied once on window creation only.
+    if !exists && !is_wayland_session() {
+        if let Err(e) = window.set_skip_taskbar(true) {
+            warn!("translate_window: set_skip_taskbar failed: {:?}", e);
+        }
     }
     // Get Translate Window Size
     let width = match get("translate_window_width") {
@@ -310,8 +348,7 @@ pub fn input_translate() {
         .unwrap()
         .replace_range(.., "[INPUT_TRANSLATE]");
     let window = translate_window();
-    #[cfg(not(target_os = "linux"))]
-    {
+    if !is_wayland_session() {
         let position_type = match get("translate_window_position") {
             Some(v) => v.as_str().unwrap().to_string(),
             None => "mouse".to_string(),
@@ -393,9 +430,10 @@ pub fn recognize_window() {
     )) {
         warn!("recognize_window: set_size failed: {:?}", e);
     }
-    #[cfg(not(target_os = "linux"))]
-    if let Err(e) = window.center() {
-        warn!("recognize_window: center() failed: {:?}", e);
+    if !is_wayland_session() {
+        if let Err(e) = window.center() {
+            warn!("recognize_window: center() failed: {:?}", e);
+        }
     }
     if let Err(e) = window.show() {
         warn!("recognize_window: show() failed: {:?}", e);
@@ -407,21 +445,18 @@ pub fn recognize_window() {
 fn screenshot_window() -> WebviewWindow {
     let (window, _exists) = build_window("screenshot", "Screenshot");
 
-    // On Linux, build_window can't use visible(false) at build time (Wayland
-    // Protocol Error 71), so the window is visible immediately. Hide it right
-    // away so the subsequent screen.capture() call doesn't capture the blank
-    // fullscreen screenshot window itself. The React Screenshot component
-    // calls appWindow.show() in its img onLoad handler once the captured image
-    // is ready.
-    #[cfg(target_os = "linux")]
-    if let Err(e) = window.hide() {
-        warn!("screenshot_window: hide() failed: {:?}", e);
-    }
+    // The window is already hidden at this point: on X11/Windows/macOS because
+    // build_window applied visible(false); on Wayland because build_window
+    // explicitly called hide() after the build step. This keeps the subsequent
+    // screen.capture() from capturing the blank fullscreen screenshot window
+    // itself. The React Screenshot component calls appWindow.show() in its
+    // img onLoad handler once the captured image is ready.
 
     // Wayland Protocol Error 71: skip_taskbar is not supported there.
-    #[cfg(not(target_os = "linux"))]
-    if let Err(e) = window.set_skip_taskbar(true) {
-        warn!("screenshot_window: set_skip_taskbar failed: {:?}", e);
+    if !is_wayland_session() {
+        if let Err(e) = window.set_skip_taskbar(true) {
+            warn!("screenshot_window: set_skip_taskbar failed: {:?}", e);
+        }
     }
     #[cfg(target_os = "macos")]
     {
@@ -522,9 +557,10 @@ pub fn updater_window() {
     if let Err(e) = window.set_size(tauri::LogicalSize::new(600, 400)) {
         warn!("updater_window: set_size failed: {:?}", e);
     }
-    #[cfg(not(target_os = "linux"))]
-    if let Err(e) = window.center() {
-        warn!("updater_window: center() failed: {:?}", e);
+    if !is_wayland_session() {
+        if let Err(e) = window.center() {
+            warn!("updater_window: center() failed: {:?}", e);
+        }
     }
     if let Err(e) = window.show() {
         warn!("updater_window: show() failed: {:?}", e);
@@ -607,9 +643,10 @@ pub fn get_thumb_window(x: i32, y: i32) -> WebviewWindow {
                 .decorations(false);
 
                 // Wayland rejects visible(false)/skip_taskbar at build time
-                // (Protocol Error 71), same workaround as in build_window().
-                #[cfg(target_os = "macos")]
-                {
+                // (Protocol Error 71). Apply them on X11/macOS/Windows; on
+                // Wayland we hide the window post-build instead.
+                let wayland = is_wayland_session();
+                if !wayland {
                     builder = builder.visible(false).skip_taskbar(true);
                 }
 
@@ -617,7 +654,11 @@ pub fn get_thumb_window(x: i32, y: i32) -> WebviewWindow {
                 {
                     builder = builder.transparent(true);
                 }
-                builder.build().unwrap()
+                let window = builder.build().unwrap();
+                if wayland {
+                    let _ = window.hide();
+                }
+                window
             };
 
             #[cfg(target_os = "windows")]
@@ -727,9 +768,10 @@ pub fn notify_window(content: &str) {
     if let Err(e) = window.set_size(tauri::LogicalSize::new(400, 400)) {
         warn!("notify_window: set_size failed: {:?}", e);
     }
-    #[cfg(not(target_os = "linux"))]
-    if let Err(e) = window.center() {
-        warn!("notify_window: center() failed: {:?}", e);
+    if !is_wayland_session() {
+        if let Err(e) = window.center() {
+            warn!("notify_window: center() failed: {:?}", e);
+        }
     }
     if let Err(e) = window.set_maximizable(false) {
         warn!("notify_window: set_maximizable failed: {:?}", e);

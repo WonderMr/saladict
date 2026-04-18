@@ -7,7 +7,8 @@ export function initAnalytics() {
     if (document.getElementById(ANALYTICS_SCRIPT_ID)) return;
     const script = document.createElement('script');
     script.id = ANALYTICS_SCRIPT_ID;
-    script.defer = true;
+    // defer has no effect on dynamically-inserted scripts; they are async by
+    // default, which is what we want here (load order doesn't matter).
     script.src = scriptUrl;
     script.setAttribute('data-website-id', websiteId);
     document.head.appendChild(script);

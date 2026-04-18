@@ -51,6 +51,8 @@ pkgs.mkShell {
     export GDK_BACKEND=x11              # Wayland protocol error 71 on multi-window
     export WEBKIT_DISABLE_DMABUF_RENDERER=1  # GBM buffer allocation failure
     export WEBKIT_DISABLE_COMPOSITING_MODE=1 # Additional rendering stability
+    # Append to LD_LIBRARY_PATH only if it's already set so we don't leave an
+    # empty trailing entry (which the dynamic linker would treat as CWD).
     export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [
       pkgs.webkitgtk_4_1
       pkgs.libsoup_3
@@ -60,6 +62,6 @@ pkgs.mkShell {
       pkgs.dbus
       pkgs.libayatana-appindicator
       pkgs.xdotool
-    ]}:$LD_LIBRARY_PATH"
+    ]}''${LD_LIBRARY_PATH:+:''$LD_LIBRARY_PATH}"
   '';
 }
