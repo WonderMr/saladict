@@ -5,6 +5,7 @@ import React from 'react';
 
 import { initStore } from './utils/store';
 import { initEnv } from './utils/env';
+import { initAnalytics } from './utils/analytics';
 import App from './App';
 
 if (import.meta.env.PROD) {
@@ -12,6 +13,8 @@ if (import.meta.env.PROD) {
         e.preventDefault();
     });
 }
+
+initAnalytics();
 
 initStore().then(async () => {
     await initEnv();

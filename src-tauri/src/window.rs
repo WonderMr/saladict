@@ -44,10 +44,16 @@ fn get_daemon_window() -> WebviewWindow {
 
 // Get monitor where the mouse is currently located
 #[cfg(not(target_os = "linux"))]
-fn get_current_monitor(x: i32, y: i32) -> Monitor {
+fn get_current_monitor(x: i32, y: i32) -> Option<Monitor> {
     info!("Mouse position: {}, {}", x, y);
     let daemon_window = get_daemon_window();
-    let monitors = daemon_window.available_monitors().unwrap();
+    let monitors = match daemon_window.available_monitors() {
+        Ok(m) => m,
+        Err(e) => {
+            warn!("available_monitors failed: {:?}", e);
+            return daemon_window.primary_monitor().ok().flatten();
+        }
+    };
 
     for m in monitors {
         let size = m.size();
@@ -59,11 +65,17 @@ fn get_current_monitor(x: i32, y: i32) -> Monitor {
             && y <= (position.y + size.height as i32)
         {
             info!("Current Monitor: {:?}", m);
-            return m;
+            return Some(m);
         }
     }
     warn!("Current Monitor not found, using primary monitor");
-    daemon_window.primary_monitor().unwrap().unwrap()
+    match daemon_window.primary_monitor() {
+        Ok(m) => m,
+        Err(e) => {
+            warn!("primary_monitor failed: {:?}", e);
+            None
+        }
+    }
 }
 
 // Creating a window on the mouse monitor
@@ -99,14 +111,14 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
                         Position { x: 0, y: 0 }
                     }
                 };
-                let position = get_current_monitor(mouse_position.x, mouse_position.y).position();
                 let hide_dock_icon = get("hide_dock_icon")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(true);
-                builder = builder
-                    .position(position.x.into(), position.y.into())
-                    .visible(false)
-                    .skip_taskbar(hide_dock_icon);
+                builder = builder.visible(false).skip_taskbar(hide_dock_icon);
+                if let Some(monitor) = get_current_monitor(mouse_position.x, mouse_position.y) {
+                    let position = monitor.position();
+                    builder = builder.position(position.x.into(), position.y.into());
+                }
             }
 
             #[cfg(target_os = "macos")]
@@ -115,7 +127,7 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
                     .title_bar_style(tauri::TitleBarStyle::Overlay)
                     .hidden_title(true);
             }
-            #[cfg(target_os = "windows")]
+            #[cfg(not(target_os = "macos"))]
             {
                 builder = builder.transparent(true).decorations(false);
             }
@@ -649,7 +661,9 @@ pub fn notify_window(content: &str) {
     let window: WebviewWindow = match app_handle.get_webview_window("notify") {
         Some(v) => {
             info!("Notification window exists");
-            v.set_focus().unwrap();
+            if let Err(e) = v.set_focus() {
+                warn!("notify_window: set_focus failed: {:?}", e);
+            }
             v
         }
         None => {
@@ -658,13 +672,23 @@ pub fn notify_window(content: &str) {
         }
     };
 
-    window.set_size(tauri::LogicalSize::new(400, 400)).unwrap();
+    if let Err(e) = window.set_size(tauri::LogicalSize::new(400, 400)) {
+        warn!("notify_window: set_size failed: {:?}", e);
+    }
     #[cfg(not(target_os = "linux"))]
     if let Err(e) = window.center() {
         warn!("notify_window: center() failed: {:?}", e);
     }
-    window.set_maximizable(false).unwrap();
-    window.set_minimizable(false).unwrap();
-    window.set_always_on_top(true).unwrap();
-    window.show().unwrap();
+    if let Err(e) = window.set_maximizable(false) {
+        warn!("notify_window: set_maximizable failed: {:?}", e);
+    }
+    if let Err(e) = window.set_minimizable(false) {
+        warn!("notify_window: set_minimizable failed: {:?}", e);
+    }
+    if let Err(e) = window.set_always_on_top(true) {
+        warn!("notify_window: set_always_on_top failed: {:?}", e);
+    }
+    if let Err(e) = window.show() {
+        warn!("notify_window: show() failed: {:?}", e);
+    }
 }
