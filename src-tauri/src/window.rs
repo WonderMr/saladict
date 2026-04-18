@@ -563,6 +563,7 @@ pub fn get_thumb_window(x: i32, y: i32) -> WebviewWindow {
 
             #[cfg(any(target_os = "macos", target_os = "linux"))]
             let window = {
+                #[allow(unused_mut)]
                 let mut builder = WebviewWindowBuilder::new(
                     handle,
                     THUMB_WIN_NAME,
@@ -573,11 +574,16 @@ pub fn get_thumb_window(x: i32, y: i32) -> WebviewWindow {
                 .inner_size(20.0, 20.0)
                 .min_inner_size(20.0, 20.0)
                 .max_inner_size(20.0, 20.0)
-                .visible(false)
                 .resizable(false)
-                .skip_taskbar(true)
                 .closable(false)
                 .decorations(false);
+
+                // Wayland rejects visible(false)/skip_taskbar at build time
+                // (Protocol Error 71), same workaround as in build_window().
+                #[cfg(target_os = "macos")]
+                {
+                    builder = builder.visible(false).skip_taskbar(true);
+                }
 
                 #[cfg(not(feature = "app-store"))]
                 {
