@@ -144,13 +144,11 @@ pub fn config_window() {
         warn!("config_window: set_size failed: {:?}", e);
     }
     #[cfg(not(target_os = "linux"))]
-    {
-        if let Err(e) = window.center() {
-            warn!("config_window: center() failed: {:?}", e);
-        }
-        if let Err(e) = window.show() {
-            warn!("config_window: show() failed: {:?}", e);
-        }
+    if let Err(e) = window.center() {
+        warn!("config_window: center() failed: {:?}", e);
+    }
+    if let Err(e) = window.show() {
+        warn!("config_window: show() failed: {:?}", e);
     }
 }
 
@@ -264,7 +262,6 @@ pub fn translate_window() -> WebviewWindow {
         }
     }
 
-    #[cfg(not(target_os = "linux"))]
     if let Err(e) = window.show() {
         warn!("translate_window: show() failed: {:?}", e);
     }
@@ -369,13 +366,11 @@ pub fn recognize_window() {
         warn!("recognize_window: set_size failed: {:?}", e);
     }
     #[cfg(not(target_os = "linux"))]
-    {
-        if let Err(e) = window.center() {
-            warn!("recognize_window: center() failed: {:?}", e);
-        }
-        if let Err(e) = window.show() {
-            warn!("recognize_window: show() failed: {:?}", e);
-        }
+    if let Err(e) = window.center() {
+        warn!("recognize_window: center() failed: {:?}", e);
+    }
+    if let Err(e) = window.show() {
+        warn!("recognize_window: show() failed: {:?}", e);
     }
     window.emit("new_image", "").unwrap();
 }
@@ -405,7 +400,6 @@ fn screenshot_window() -> WebviewWindow {
     if let Err(e) = window.set_always_on_top(true) {
         warn!("screenshot_window: set_always_on_top failed: {:?}", e);
     }
-    #[cfg(not(target_os = "linux"))]
     if let Err(e) = window.show() {
         warn!("screenshot_window: show() failed: {:?}", e);
     }
@@ -490,13 +484,11 @@ pub fn updater_window() {
         warn!("updater_window: set_size failed: {:?}", e);
     }
     #[cfg(not(target_os = "linux"))]
-    {
-        if let Err(e) = window.center() {
-            warn!("updater_window: center() failed: {:?}", e);
-        }
-        if let Err(e) = window.show() {
-            warn!("updater_window: show() failed: {:?}", e);
-        }
+    if let Err(e) = window.center() {
+        warn!("updater_window: center() failed: {:?}", e);
+    }
+    if let Err(e) = window.show() {
+        warn!("updater_window: show() failed: {:?}", e);
     }
 }
 
