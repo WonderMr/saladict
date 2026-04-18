@@ -30,11 +30,20 @@ use serde_json;
 #[cfg(target_os = "linux")]
 fn is_wayland_session() -> bool {
     if let Ok(backend) = std::env::var("GDK_BACKEND") {
-        if backend.contains("x11") {
-            return false;
-        }
-        if backend.contains("wayland") {
-            return true;
+        // GDK_BACKEND is a comma-separated priority list (e.g. "wayland,x11"
+        // means "prefer Wayland, fall back to X11"). GDK picks the first entry
+        // that's available, so only the primary selector should classify the
+        // session — substring matching would misread "wayland,x11" as X11.
+        let primary = backend
+            .split(',')
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_ascii_lowercase();
+        match primary.as_str() {
+            "x11" => return false,
+            "wayland" => return true,
+            _ => {}
         }
     }
     std::env::var("WAYLAND_DISPLAY")
