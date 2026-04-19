@@ -186,8 +186,16 @@ fn main() {
             tauri::RunEvent::Ready => {
                 mouse_hook::bind_mouse_hook();
             }
-            tauri::RunEvent::ExitRequested { api, .. } => {
-                api.prevent_exit();
+            tauri::RunEvent::ExitRequested { api, code, .. } => {
+                // Only prevent implicit exits (triggered when the last window
+                // closes, which on Linux/GTK can happen when the config window
+                // is closed while the tray is still alive). An explicit
+                // app.exit(n) call from the "Quit" tray handler carries a
+                // code — let those pass through so the process actually
+                // terminates.
+                if code.is_none() {
+                    api.prevent_exit();
+                }
             }
             _ => {}
         });
