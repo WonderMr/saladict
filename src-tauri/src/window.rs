@@ -424,40 +424,28 @@ pub fn selection_translate() {
     }
 }
 
-// Try every available source to grab the user's currently-highlighted text.
-// On KDE/GNOME Wayland running saladict under XWayland (GDK_BACKEND=x11),
-// the `selection` crate's PRIMARY read can come back empty if the source
-// app wrote to the Wayland primary buffer instead of X11 PRIMARY. Falling
-// back to the cached text from the mouse hook and then to the system
-// clipboard (Ctrl+C) covers the common failure modes without the user
-// needing to know which path their compositor uses.
+// Try to grab the user's currently-highlighted text. On KDE/GNOME Wayland
+// running saladict under XWayland (GDK_BACKEND=x11) the `selection` crate's
+// PRIMARY read can come back empty if the source app wrote to the Wayland
+// primary buffer instead of the X11 one, so we fall back to the cached text
+// captured by mouse_hook at the moment the user released the mouse.
+//
+// The system CLIPBOARD is intentionally NOT a fallback here — on sessions
+// where primary selection doesn't bridge correctly it would cause every
+// selection_translate invocation to silently paste whatever was last Ctrl+C'd,
+// which is both surprising and wrong. Users who explicitly want "translate
+// whatever is on my clipboard" can Ctrl+C and use a dedicated flow instead.
 fn capture_selected_text() -> String {
     let primary = selection::get_text();
     if !primary.trim().is_empty() {
         return primary;
     }
-    log::debug!(
-        "capture_selected_text: primary selection empty, trying mouse_hook cache"
-    );
+    log::debug!("capture_selected_text: primary selection empty, trying mouse_hook cache");
     let cached = crate::mouse_hook::SELECTED_TEXT.lock().clone();
     if !cached.trim().is_empty() {
         return cached;
     }
-    log::debug!("capture_selected_text: mouse_hook cache empty, trying clipboard");
-    match arboard::Clipboard::new() {
-        Ok(mut cb) => match cb.get_text() {
-            Ok(text) if !text.trim().is_empty() => text,
-            Ok(_) => String::new(),
-            Err(e) => {
-                warn!("capture_selected_text: clipboard read failed: {:?}", e);
-                String::new()
-            }
-        },
-        Err(e) => {
-            warn!("capture_selected_text: clipboard open failed: {:?}", e);
-            String::new()
-        }
-    }
+    String::new()
 }
 
 pub fn input_translate() {

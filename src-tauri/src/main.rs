@@ -59,6 +59,28 @@ fn main() {
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir { file_name: None }),
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
                 ])
+                // Suppress noisy dependency logs that would otherwise fill the
+                // console — they're very chatty during startup / window
+                // operations but rarely what the user needs to see. Our own
+                // info!/warn! output stays at the default Info level.
+                .level(log::LevelFilter::Info)
+                .level_for("tao", log::LevelFilter::Warn)
+                .level_for("wry", log::LevelFilter::Warn)
+                .level_for("hyper", log::LevelFilter::Warn)
+                .level_for("hyper_util", log::LevelFilter::Warn)
+                .level_for("reqwest", log::LevelFilter::Warn)
+                .level_for("h2", log::LevelFilter::Warn)
+                .level_for("rustls", log::LevelFilter::Warn)
+                .level_for("tracing", log::LevelFilter::Warn)
+                .level_for("tokio", log::LevelFilter::Warn)
+                .level_for("tokio_util", log::LevelFilter::Warn)
+                .level_for("mio", log::LevelFilter::Warn)
+                .level_for("sqlx", log::LevelFilter::Warn)
+                .level_for("tauri", log::LevelFilter::Warn)
+                .level_for("tauri_plugin_sql", log::LevelFilter::Warn)
+                .level_for("tauri_plugin_store", log::LevelFilter::Warn)
+                .level_for("tauri_plugin_fs", log::LevelFilter::Warn)
+                .level_for("tauri_plugin_updater", log::LevelFilter::Warn)
                 .build(),
         )
         .plugin(tauri_plugin_autostart::init(
