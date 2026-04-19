@@ -128,17 +128,26 @@ export default function Translate() {
             };
             // Save only on user-initiated movement or close.
             //
-            // An earlier version also saved right after this effect bound, on
-            // the theory that we'd otherwise miss the initial placement. In
-            // practice it created a feedback loop: Rust applies saved (x, y),
-            // the WM nudges the window by a few pixels to account for
-            // decorations/shadow, the mount save reads that nudged position
-            // and persists it, and every subsequent open accumulates the
-            // offset — the window visibly drifts to the right on each
-            // reopen. Rust already falls back to the mouse cursor when the
-            // config keys aren't set, so the first-time case is handled
-            // without an on-mount save.
+            // Two feedback loops had to be killed to make this stop drifting
+            // a few pixels right on every reopen:
+            //
+            // 1. An earlier version saved right after this effect bound —
+            //    that captured the WM's post-layout nudge and fed it back in.
+            //    Dropped that on-mount save; Rust's mouse-cursor fallback
+            //    handles the first-open case instead.
+            //
+            // 2. Rust's set_position(saved_x, saved_y) when the window is
+            //    first built also fires tauri://move, and the WM's tiny
+            //    frame-offset adjustment fires another one, both of which
+            //    land while this listener is already bound. That read-back
+            //    would persist (saved + offset) and accumulate the same
+            //    drift. Ignore move events for the initial 500ms — by that
+            //    time the compositor has settled and any later move is a
+            //    real user drag.
+            const mountTime = Date.now();
+            const MOVE_IGNORE_MS = 500;
             const unlistenMove = listen('tauri://move', async () => {
+                if (Date.now() - mountTime < MOVE_IGNORE_MS) return;
                 if (moveTimeout) {
                     clearTimeout(moveTimeout);
                 }
