@@ -111,6 +111,11 @@ export default function Translate() {
     // 保存窗口位置
     useEffect(() => {
         if (windowPosition !== null && windowPosition === 'pre_state') {
+            // Deltas smaller than this between the current window position
+            // and what's already in the store are assumed to be WM frame /
+            // shadow re-layout, not a real user drag. Real drags are always
+            // larger than a handful of pixels.
+            const DRIFT_IGNORE_PX = 10;
             const savePosition = async () => {
                 if (appWindow.label !== 'translate') return;
                 // currentMonitor() can resolve to null when the OS can't
@@ -122,8 +127,29 @@ export default function Translate() {
                 const monitor = await currentMonitor();
                 const factor = monitor ? monitor.scaleFactor : 1.0;
                 const position = (await appWindow.outerPosition()).toLogical(factor);
-                await store.set('translate_window_position_x', parseInt(position.x));
-                await store.set('translate_window_position_y', parseInt(position.y));
+                const newX = parseInt(position.x);
+                const newY = parseInt(position.y);
+
+                // Skip saves that are within a few pixels of what's already
+                // persisted. Setting the window to a saved position and
+                // reading outerPosition() back can report `saved + N` (for
+                // small N) because of GTK CSD shadows / WM frame offsets
+                // that aren't round-trippable; persisting that `saved + N`
+                // would accumulate drift on every reopen. Real user drags
+                // are always larger than a few pixels.
+                const savedX = await store.get('translate_window_position_x');
+                const savedY = await store.get('translate_window_position_y');
+                if (
+                    typeof savedX === 'number' &&
+                    typeof savedY === 'number' &&
+                    Math.abs(newX - savedX) < DRIFT_IGNORE_PX &&
+                    Math.abs(newY - savedY) < DRIFT_IGNORE_PX
+                ) {
+                    return;
+                }
+
+                await store.set('translate_window_position_x', newX);
+                await store.set('translate_window_position_y', newY);
                 await store.save();
             };
             // Save only on user-initiated movement or close.
