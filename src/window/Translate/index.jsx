@@ -111,69 +111,27 @@ export default function Translate() {
     // 保存窗口位置
     useEffect(() => {
         if (windowPosition !== null && windowPosition === 'pre_state') {
-            // Deltas smaller than this between the current window position
-            // and what's already in the store are assumed to be WM frame /
-            // shadow re-layout, not a real user drag. Real drags are always
-            // larger than a handful of pixels.
-            const DRIFT_IGNORE_PX = 10;
             const savePosition = async () => {
                 if (appWindow.label !== 'translate') return;
-                // currentMonitor() can resolve to null when the OS can't
-                // determine the monitor (common on Wayland compositors and
-                // during teardown). Fall back to a scaleFactor of 1.0 so the
-                // save still succeeds — a slightly off HiDPI coordinate is
-                // far better than crashing the handler with
-                // `Cannot read properties of null`.
+                // currentMonitor() can resolve to null on Wayland / teardown;
+                // fall back to scaleFactor=1.0 so the save path doesn't crash
+                // with "Cannot read properties of null".
                 const monitor = await currentMonitor();
                 const factor = monitor ? monitor.scaleFactor : 1.0;
                 const position = (await appWindow.outerPosition()).toLogical(factor);
-                const newX = parseInt(position.x);
-                const newY = parseInt(position.y);
-
-                // Skip saves that are within a few pixels of what's already
-                // persisted. Setting the window to a saved position and
-                // reading outerPosition() back can report `saved + N` (for
-                // small N) because of GTK CSD shadows / WM frame offsets
-                // that aren't round-trippable; persisting that `saved + N`
-                // would accumulate drift on every reopen. Real user drags
-                // are always larger than a few pixels.
-                const savedX = await store.get('translate_window_position_x');
-                const savedY = await store.get('translate_window_position_y');
-                if (
-                    typeof savedX === 'number' &&
-                    typeof savedY === 'number' &&
-                    Math.abs(newX - savedX) < DRIFT_IGNORE_PX &&
-                    Math.abs(newY - savedY) < DRIFT_IGNORE_PX
-                ) {
-                    return;
-                }
-
-                await store.set('translate_window_position_x', newX);
-                await store.set('translate_window_position_y', newY);
+                await store.set('translate_window_position_x', parseInt(position.x));
+                await store.set('translate_window_position_y', parseInt(position.y));
                 await store.save();
             };
-            // Save only on user-initiated movement or close.
-            //
-            // Two feedback loops had to be killed to make this stop drifting
-            // a few pixels right on every reopen:
-            //
-            // 1. An earlier version saved right after this effect bound —
-            //    that captured the WM's post-layout nudge and fed it back in.
-            //    Dropped that on-mount save; Rust's mouse-cursor fallback
-            //    handles the first-open case instead.
-            //
-            // 2. Rust's set_position(saved_x, saved_y) when the window is
-            //    first built also fires tauri://move, and the WM's tiny
-            //    frame-offset adjustment fires another one, both of which
-            //    land while this listener is already bound. That read-back
-            //    would persist (saved + offset) and accumulate the same
-            //    drift. Ignore move events for the initial 500ms — by that
-            //    time the compositor has settled and any later move is a
-            //    real user drag.
-            const mountTime = Date.now();
-            const MOVE_IGNORE_MS = 500;
+            // Save only in response to actual tauri://move events (i.e. real
+            // user drags). This is the shape that worked in 48b5ade — every
+            // attempted refinement (on-mount save, on-close save, fixed
+            // debounce threshold, initial-grace-period filter) ended up
+            // feeding the WM's own frame-decoration round-trip back into the
+            // store and drifting the window right on every reopen. Keep this
+            // path minimal and rely on the tauri://move debounce as the sole
+            // persistence trigger.
             const unlistenMove = listen('tauri://move', async () => {
-                if (Date.now() - mountTime < MOVE_IGNORE_MS) return;
                 if (moveTimeout) {
                     clearTimeout(moveTimeout);
                 }
@@ -183,37 +141,12 @@ export default function Translate() {
                     );
                 }, 100);
             });
-            // Deliberately do NOT call savePosition() on close.
-            //
-            // outerPosition() at close time can include the WM's
-            // frame-decoration layout nudge — reading it back and persisting
-            // it is what causes the right-drift feedback loop on every
-            // reopen. The move-debounce listener above has already captured
-            // any meaningful user drag during the session; if the user closes
-            // without dragging (or drags and closes within the 100ms
-            // debounce window), the previously-saved position survives,
-            // which is strictly better than accumulating offset.
-            //
-            // Clearing the pending debounce timer keeps the closure from
-            // leaking a reference to the torn-down webview.
-            const unlistenClose = appWindow.onCloseRequested(() => {
-                if (moveTimeout) {
-                    clearTimeout(moveTimeout);
-                    moveTimeout = null;
-                }
-            });
             return () => {
-                // Clear any pending debounced save so it doesn't fire after
-                // the listeners are unbound (e.g. when the user switches
-                // translate_window_position away from pre_state mid-session).
                 if (moveTimeout) {
                     clearTimeout(moveTimeout);
                     moveTimeout = null;
                 }
                 unlistenMove.then((f) => {
-                    f();
-                });
-                unlistenClose.then((f) => {
                     f();
                 });
             };
