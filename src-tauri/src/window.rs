@@ -90,7 +90,9 @@ fn get_daemon_window() -> WebviewWindow {
                 .build()
                 .expect("get_daemon_window: failed to build daemon window");
             if wayland {
-                let _ = window.hide();
+                if let Err(e) = window.hide() {
+                    warn!("get_daemon_window: hide() failed: {:?}", e);
+                }
             }
             window
         }
@@ -199,7 +201,9 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
 
             if label != "screenshot" {
                 #[cfg(any(target_os = "macos", target_os = "windows"))]
-                set_shadow(&window, true).unwrap_or_default();
+                if let Err(e) = set_shadow(&window, true) {
+                    warn!("build_window: set_shadow failed for '{}': {:?}", label, e);
+                }
             }
             // show() is intentionally not called here — callers apply sizing,
             // positioning, and centering, and then show the window themselves
@@ -207,7 +211,9 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
             // couldn't use visible(false) at builder time, so hide now to
             // restore the same "invisible until caller shows" contract.
             if wayland {
-                let _ = window.hide();
+                if let Err(e) = window.hide() {
+                    warn!("build_window: post-build hide() failed for '{}': {:?}", label, e);
+                }
             } else {
                 let _ = window.current_monitor();
             }
@@ -365,9 +371,11 @@ pub fn selection_translate() {
     }
 
     let window = translate_window();
-    if let Err(e) = window.show() {
-        warn!("selection_translate: show() failed: {:?}", e);
-    }
+    // Visibility is handled by the JS handleNewText listener in
+    // Translate/components/SourceArea — it reads translate_hide_window and
+    // calls appWindow.show()/hide() + setFocus() itself. Calling show() here
+    // would flash the window visible for users with translate_hide_window
+    // enabled before the JS handler runs and hides it again.
     if let Err(e) = window.emit("new_text", text) {
         warn!("selection_translate: emit(new_text) failed: {:?}", e);
     }
@@ -394,10 +402,8 @@ pub fn input_translate() {
             }
         }
     }
-    if let Err(e) = window.show() {
-        warn!("input_translate: show() failed: {:?}", e);
-    }
-
+    // Visibility is handled by the JS handleNewText listener — it always
+    // show()s on [INPUT_TRANSLATE] regardless of translate_hide_window.
     if let Err(e) = window.emit("new_text", "[INPUT_TRANSLATE]") {
         warn!("input_translate: emit(new_text) failed: {:?}", e);
     }
@@ -409,9 +415,9 @@ pub fn text_translate(text: String) {
     let state: tauri::State<StringWrapper> = app_handle.state();
     state.0.lock().unwrap().replace_range(.., &text);
     let window = translate_window();
-    if let Err(e) = window.show() {
-        warn!("text_translate: show() failed: {:?}", e);
-    }
+    // Visibility is handled by the JS handleNewText listener (see
+    // selection_translate for details) — avoid a flash when the user has
+    // translate_hide_window enabled.
     if let Err(e) = window.emit("new_text", text) {
         warn!("text_translate: emit(new_text) failed: {:?}", e);
     }
@@ -426,9 +432,8 @@ pub fn image_translate() {
         .unwrap()
         .replace_range(.., "[IMAGE_TRANSLATE]");
     let window = translate_window();
-    if let Err(e) = window.show() {
-        warn!("image_translate: show() failed: {:?}", e);
-    }
+    // Visibility is handled by the JS handleNewText listener (see
+    // selection_translate for details).
     if let Err(e) = window.emit("new_text", "[IMAGE_TRANSLATE]") {
         warn!("image_translate: emit(new_text) failed: {:?}", e);
     }
@@ -705,7 +710,9 @@ pub fn get_thumb_window(x: i32, y: i32) -> WebviewWindow {
                     .build()
                     .expect("get_thumb_window: failed to build thumb window");
                 if wayland {
-                    let _ = window.hide();
+                    if let Err(e) = window.hide() {
+                        warn!("get_thumb_window: post-build hide() failed: {:?}", e);
+                    }
                 }
                 window
             };
@@ -713,7 +720,9 @@ pub fn get_thumb_window(x: i32, y: i32) -> WebviewWindow {
             #[cfg(target_os = "windows")]
             let window = {
                 let window = build_window(THUMB_WIN_NAME, THUMB_WIN_NAME).0;
-                set_shadow(&window, false).unwrap_or_default();
+                if let Err(e) = set_shadow(&window, false) {
+                    warn!("get_thumb_window: set_shadow failed: {:?}", e);
+                }
                 if let Err(e) = window.set_resizable(false) {
                     warn!("get_thumb_window: set_resizable failed: {:?}", e);
                 }
