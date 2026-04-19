@@ -111,10 +111,6 @@ export default function Translate() {
     // 保存窗口位置
     useEffect(() => {
         if (windowPosition !== null && windowPosition === 'pre_state') {
-            // Save once right after the effect binds, so reopening the window
-            // before the user has moved it captures the current placement
-            // (otherwise the Rust side would read 0,0 and pin the window to
-            // the primary monitor's top-left).
             const savePosition = async () => {
                 if (appWindow.label !== 'translate') return;
                 const position = (await appWindow.outerPosition()).toLogical(
@@ -124,7 +120,18 @@ export default function Translate() {
                 await store.set('translate_window_position_y', parseInt(position.y));
                 await store.save();
             };
-            savePosition();
+            // Save only on user-initiated movement or close.
+            //
+            // An earlier version also saved right after this effect bound, on
+            // the theory that we'd otherwise miss the initial placement. In
+            // practice it created a feedback loop: Rust applies saved (x, y),
+            // the WM nudges the window by a few pixels to account for
+            // decorations/shadow, the mount save reads that nudged position
+            // and persists it, and every subsequent open accumulates the
+            // offset — the window visibly drifts to the right on each
+            // reopen. Rust already falls back to the mouse cursor when the
+            // config keys aren't set, so the first-time case is handled
+            // without an on-mount save.
             const unlistenMove = listen('tauri://move', async () => {
                 if (moveTimeout) {
                     clearTimeout(moveTimeout);
