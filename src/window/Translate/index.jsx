@@ -157,22 +157,23 @@ export default function Translate() {
                     );
                 }, 100);
             });
-            // close-on-blur has a 100ms grace period that races with the
-            // 100ms move-debounce — if the user drags the window and clicks
-            // away immediately the save can lose the race. Defer the actual
-            // close so savePosition() is guaranteed to complete before the
-            // window goes away (otherwise the async await runs detached and
-            // the tauri runtime tears the webview down first).
-            const unlistenClose = appWindow.onCloseRequested(async (event) => {
-                event.preventDefault();
+            // Deliberately do NOT call savePosition() on close.
+            //
+            // outerPosition() at close time can include the WM's
+            // frame-decoration layout nudge — reading it back and persisting
+            // it is what causes the right-drift feedback loop on every
+            // reopen. The move-debounce listener above has already captured
+            // any meaningful user drag during the session; if the user closes
+            // without dragging (or drags and closes within the 100ms
+            // debounce window), the previously-saved position survives,
+            // which is strictly better than accumulating offset.
+            //
+            // Clearing the pending debounce timer keeps the closure from
+            // leaking a reference to the torn-down webview.
+            const unlistenClose = appWindow.onCloseRequested(() => {
                 if (moveTimeout) {
                     clearTimeout(moveTimeout);
                     moveTimeout = null;
-                }
-                try {
-                    await savePosition();
-                } finally {
-                    await appWindow.destroy();
                 }
             });
             return () => {
