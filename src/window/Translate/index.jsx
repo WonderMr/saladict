@@ -15,7 +15,7 @@ import TargetArea from './components/TargetArea';
 import { osType } from '../../utils/env';
 import { useConfig } from '../../hooks';
 import { store } from '../../utils/store';
-import { info } from '@tauri-apps/plugin-log';
+import { info, warn } from '@tauri-apps/plugin-log';
 import { default_translate_service_list } from '../../services/translate/constants';
 
 const appWindow = getCurrentWindow();
@@ -111,23 +111,48 @@ export default function Translate() {
     // 保存窗口位置
     useEffect(() => {
         if (windowPosition !== null && windowPosition === 'pre_state') {
+            const savePosition = async () => {
+                if (appWindow.label !== 'translate') return;
+                // currentMonitor() can resolve to null on Wayland / teardown;
+                // fall back to scaleFactor=1.0 so the save path doesn't crash
+                // with "Cannot read properties of null".
+                const monitor = await currentMonitor();
+                const factor = monitor ? monitor.scaleFactor : 1.0;
+                // Read innerPosition (client-area top-left) rather than
+                // outerPosition. On X11/GTK with decorations(false) set via
+                // build_window, the WM can still report a client-area-shadow
+                // offset in outerPosition() that doesn't round-trip through
+                // Rust's set_position(), which fed a per-reopen drift
+                // accumulation. innerPosition maps 1:1 to what Rust applies
+                // on the next reopen.
+                const position = (await appWindow.innerPosition()).toLogical(factor);
+                await store.set('translate_window_position_x', parseInt(position.x));
+                await store.set('translate_window_position_y', parseInt(position.y));
+                await store.save();
+            };
+            // Save only in response to actual tauri://move events (i.e. real
+            // user drags). This is the shape that worked in 48b5ade — every
+            // attempted refinement (on-mount save, on-close save, fixed
+            // debounce threshold, initial-grace-period filter) ended up
+            // feeding the WM's own frame-decoration round-trip back into the
+            // store and drifting the window right on every reopen. Keep this
+            // path minimal and rely on the tauri://move debounce as the sole
+            // persistence trigger.
             const unlistenMove = listen('tauri://move', async () => {
                 if (moveTimeout) {
                     clearTimeout(moveTimeout);
                 }
-                moveTimeout = setTimeout(async () => {
-                    if (appWindow.label === 'translate') {
-                        let position = await appWindow.outerPosition();
-                        const monitor = await currentMonitor();
-                        const factor = monitor.scaleFactor;
-                        position = position.toLogical(factor);
-                        await store.set('translate_window_position_x', parseInt(position.x));
-                        await store.set('translate_window_position_y', parseInt(position.y));
-                        await store.save();
-                    }
+                moveTimeout = setTimeout(() => {
+                    savePosition().catch((e) =>
+                        warn(`Translate: savePosition failed: ${e}`)
+                    );
                 }, 100);
             });
             return () => {
+                if (moveTimeout) {
+                    clearTimeout(moveTimeout);
+                    moveTimeout = null;
+                }
                 unlistenMove.then((f) => {
                     f();
                 });
@@ -137,23 +162,30 @@ export default function Translate() {
     // 保存窗口大小
     useEffect(() => {
         if (rememberWindowSize !== null && rememberWindowSize) {
+            const saveSize = async () => {
+                if (appWindow.label !== 'translate') return;
+                // currentMonitor() can resolve to null on Wayland / teardown;
+                // fall back to scaleFactor=1.0 rather than crashing the handler.
+                const monitor = await currentMonitor();
+                const factor = monitor ? monitor.scaleFactor : 1.0;
+                const size = (await appWindow.outerSize()).toLogical(factor);
+                await store.set('translate_window_height', parseInt(size.height));
+                await store.set('translate_window_width', parseInt(size.width));
+                await store.save();
+            };
             const unlistenResize = listen('tauri://resize', async () => {
                 if (resizeTimeout) {
                     clearTimeout(resizeTimeout);
                 }
-                resizeTimeout = setTimeout(async () => {
-                    if (appWindow.label === 'translate') {
-                        let size = await appWindow.outerSize();
-                        const monitor = await currentMonitor();
-                        const factor = monitor.scaleFactor;
-                        size = size.toLogical(factor);
-                        await store.set('translate_window_height', parseInt(size.height));
-                        await store.set('translate_window_width', parseInt(size.width));
-                        await store.save();
-                    }
+                resizeTimeout = setTimeout(() => {
+                    saveSize().catch((e) => warn(`Translate: saveSize failed: ${e}`));
                 }, 100);
             });
             return () => {
+                if (resizeTimeout) {
+                    clearTimeout(resizeTimeout);
+                    resizeTimeout = null;
+                }
                 unlistenResize.then((f) => {
                     f();
                 });
