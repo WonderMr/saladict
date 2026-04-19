@@ -389,11 +389,19 @@ pub fn translate_window() -> WebviewWindow {
 
 pub fn selection_translate() {
     let text = capture_selected_text();
+    let trimmed = text.trim();
 
-    if !text.trim().is_empty() {
+    if !trimmed.is_empty() {
         let app_handle = APP.get().unwrap();
         let state: tauri::State<StringWrapper> = app_handle.state();
-        state.0.lock().unwrap().replace_range(.., &text);
+        // Always persist / emit the trimmed text so a stray leading/trailing
+        // newline from the clipboard doesn't surface as a literal "\n" in
+        // the translate window.
+        state
+            .0
+            .lock()
+            .unwrap()
+            .replace_range(.., trimmed);
     } else {
         warn!(
             "selection_translate: no text captured (XDG_SESSION_TYPE={:?}, \
@@ -411,7 +419,7 @@ pub fn selection_translate() {
     // Visibility is handled by the JS handleNewText listener in
     // Translate/components/SourceArea — it reads translate_hide_window and
     // calls appWindow.show()/hide() + setFocus() itself.
-    if let Err(e) = window.emit("new_text", text) {
+    if let Err(e) = window.emit("new_text", trimmed) {
         warn!("selection_translate: emit(new_text) failed: {:?}", e);
     }
 }
@@ -425,19 +433,37 @@ pub fn selection_translate() {
 // needing to know which path their compositor uses.
 fn capture_selected_text() -> String {
     let primary = selection::get_text();
+    info!(
+        "capture_selected_text: primary selection = {:?} (len={})",
+        primary,
+        primary.len()
+    );
     if !primary.trim().is_empty() {
         return primary;
     }
-    info!("selection::get_text() returned empty; trying mouse_hook cache");
     let cached = crate::mouse_hook::SELECTED_TEXT.lock().clone();
+    info!(
+        "capture_selected_text: mouse_hook cache = {:?} (len={})",
+        cached,
+        cached.len()
+    );
     if !cached.trim().is_empty() {
         return cached;
     }
-    info!("mouse_hook cache empty; trying system clipboard");
     match arboard::Clipboard::new() {
         Ok(mut cb) => match cb.get_text() {
-            Ok(text) if !text.trim().is_empty() => text,
-            Ok(_) => String::new(),
+            Ok(text) => {
+                info!(
+                    "capture_selected_text: clipboard = {:?} (len={})",
+                    text,
+                    text.len()
+                );
+                if !text.trim().is_empty() {
+                    text
+                } else {
+                    String::new()
+                }
+            }
             Err(e) => {
                 warn!("capture_selected_text: clipboard read failed: {:?}", e);
                 String::new()
@@ -479,15 +505,18 @@ pub fn input_translate() {
 }
 
 pub fn text_translate(text: String) {
+    // Strip leading/trailing whitespace so a lone "\n" captured by the
+    // mouse_hook thumb path doesn't become the translate-window content.
+    let trimmed = text.trim();
+    info!("text_translate: input {:?} (len={}) -> trimmed {:?}", text, text.len(), trimmed);
     let app_handle = APP.get().unwrap();
-    // Clear State
     let state: tauri::State<StringWrapper> = app_handle.state();
-    state.0.lock().unwrap().replace_range(.., &text);
+    state.0.lock().unwrap().replace_range(.., trimmed);
     let window = translate_window();
     // Visibility is handled by the JS handleNewText listener (see
     // selection_translate for details) — avoid a flash when the user has
     // translate_hide_window enabled.
-    if let Err(e) = window.emit("new_text", text) {
+    if let Err(e) = window.emit("new_text", trimmed) {
         warn!("text_translate: emit(new_text) failed: {:?}", e);
     }
 }
