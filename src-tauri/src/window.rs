@@ -141,8 +141,14 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
         Some(v) => {
             info!("Window existence: {}", label);
             // show() is intentionally not called here — callers may re-center
-            // or re-size before the window becomes visible. set_focus stays
-            // because it doesn't affect position and brings the window to front.
+            // or re-size before the window becomes visible.
+            // unminimize() first so set_focus() (and any subsequent show())
+            // actually restores the window when the user had minimized it.
+            // Without this, a minimized + skip_taskbar window is unreachable
+            // (no taskbar entry to click, set_focus is a no-op).
+            if let Err(e) = v.unminimize() {
+                warn!("build_window: unminimize() failed for {}: {:?}", label, e);
+            }
             let _ = v.set_focus();
             (v, true)
         }
