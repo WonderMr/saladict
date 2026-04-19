@@ -113,9 +113,15 @@ export default function Translate() {
         if (windowPosition !== null && windowPosition === 'pre_state') {
             const savePosition = async () => {
                 if (appWindow.label !== 'translate') return;
-                const position = (await appWindow.outerPosition()).toLogical(
-                    (await currentMonitor()).scaleFactor
-                );
+                // currentMonitor() can resolve to null when the OS can't
+                // determine the monitor (common on Wayland compositors and
+                // during teardown). Fall back to a scaleFactor of 1.0 so the
+                // save still succeeds — a slightly off HiDPI coordinate is
+                // far better than crashing the handler with
+                // `Cannot read properties of null`.
+                const monitor = await currentMonitor();
+                const factor = monitor ? monitor.scaleFactor : 1.0;
+                const position = (await appWindow.outerPosition()).toLogical(factor);
                 await store.set('translate_window_position_x', parseInt(position.x));
                 await store.set('translate_window_position_y', parseInt(position.y));
                 await store.save();
@@ -140,14 +146,21 @@ export default function Translate() {
             });
             // close-on-blur has a 100ms grace period that races with the
             // 100ms move-debounce — if the user drags the window and clicks
-            // away immediately the save can lose the race. Save synchronously
-            // on close so the latest position always survives.
-            const unlistenClose = appWindow.onCloseRequested(async () => {
+            // away immediately the save can lose the race. Defer the actual
+            // close so savePosition() is guaranteed to complete before the
+            // window goes away (otherwise the async await runs detached and
+            // the tauri runtime tears the webview down first).
+            const unlistenClose = appWindow.onCloseRequested(async (event) => {
+                event.preventDefault();
                 if (moveTimeout) {
                     clearTimeout(moveTimeout);
                     moveTimeout = null;
                 }
-                await savePosition();
+                try {
+                    await savePosition();
+                } finally {
+                    await appWindow.destroy();
+                }
             });
             return () => {
                 unlistenMove.then((f) => {

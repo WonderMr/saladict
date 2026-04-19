@@ -149,7 +149,9 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
             if let Err(e) = v.unminimize() {
                 warn!("build_window: unminimize() failed for {}: {:?}", label, e);
             }
-            let _ = v.set_focus();
+            if let Err(e) = v.set_focus() {
+                warn!("build_window: set_focus() failed for {}: {:?}", label, e);
+            }
             (v, true)
         }
         None => {
@@ -220,9 +222,14 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
                 if let Err(e) = window.hide() {
                     warn!("build_window: post-build hide() failed for '{}': {:?}", label, e);
                 }
-            } else {
-                let _ = window.current_monitor();
             }
+            // current_monitor() is called purely for its side effect of
+            // forcing Tauri's monitor bookkeeping to refresh before the
+            // caller reads scale_factor / size; the returned Result is
+            // irrelevant here (callers handle monitor-lookup failures via
+            // their own current_monitor() calls). Invoke on both branches
+            // so Wayland and non-Wayland paths behave consistently.
+            let _ = window.current_monitor();
             (window, false)
         }
     }
@@ -353,6 +360,14 @@ pub fn translate_window() -> WebviewWindow {
             // the config — otherwise the user just enabled pre_state and
             // hasn't moved the window yet, so fall back to mouse positioning
             // instead of pinning the window to (0, 0) of the primary monitor.
+            //
+            // The saved values are logical pixels (the JS side persists via
+            // toLogical(scaleFactor)), so they need multiplication by `dpi`
+            // to get physical coordinates. The mouse fallback is *already*
+            // in physical pixels (mouse_position comes from
+            // Mouse::get_mouse_position()), so it must be passed through
+            // without scaling — otherwise on HiDPI displays the window ends
+            // up at twice the intended offset from the origin.
             let saved = get("translate_window_position_x")
                 .and_then(|v| v.as_i64())
                 .and_then(|x| {
@@ -360,20 +375,20 @@ pub fn translate_window() -> WebviewWindow {
                         .and_then(|v| v.as_i64())
                         .map(|y| (x, y))
                 });
-            let (position_x, position_y) = match saved {
-                Some(xy) => xy,
+            let (physical_x, physical_y) = match saved {
+                Some((x, y)) => ((x as f64) * dpi, (y as f64) * dpi),
                 None => {
                     log::debug!(
                         "translate_window: no saved pre_state position yet; \
                          falling back to mouse cursor"
                     );
-                    (mouse_position.x as i64, mouse_position.y as i64)
+                    (mouse_position.x as f64, mouse_position.y as f64)
                 }
             };
             if !is_wayland_session() {
                 if let Err(e) = window.set_position(tauri::PhysicalPosition::new(
-                    (position_x as f64) * dpi,
-                    (position_y as f64) * dpi,
+                    physical_x,
+                    physical_y,
                 )) {
                     warn!("translate_window: set_position failed: {:?}", e);
                 }
