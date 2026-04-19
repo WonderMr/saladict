@@ -251,9 +251,17 @@ pub fn translate_window() -> WebviewWindow {
         }
     };
     let (window, exists) = build_window("translate", "Translate");
+    // Re-applying size/position to an already-visible existing window would
+    // make it visibly jump to the current mouse cursor on every text
+    // selection (or snap to a different size after a config edit). The
+    // trade-off: a translate_window_width/height config change only takes
+    // effect after the user closes and re-opens the window. This matches
+    // the pre-PR behavior.
+    if exists {
+        return window;
+    }
     // Wayland Protocol Error 71: skip_taskbar is not supported there.
-    // Applied once on window creation only.
-    if !exists && !is_wayland_session() {
+    if !is_wayland_session() {
         if let Err(e) = window.set_skip_taskbar(true) {
             warn!("translate_window: set_skip_taskbar failed: {:?}", e);
         }
@@ -810,14 +818,25 @@ pub fn notify_window(content: &str) {
     // errors) are logged but not fatal — we still want to show the window.
     match app_handle.path().app_config_dir() {
         Ok(app_dir) => {
-            let notify_file = app_dir.join("notify_content.json");
-            let content_json = serde_json::json!({ "content": content });
-            if let Err(e) = std::fs::write(&notify_file, content_json.to_string()) {
+            // app_config_dir can return a path that doesn't exist yet on a
+            // fresh install; create it before writing so we don't fail with
+            // NotFound and render an empty notification.
+            if let Err(e) = std::fs::create_dir_all(&app_dir) {
                 warn!(
-                    "notify_window: failed to write {}: {:?}",
-                    notify_file.display(),
+                    "notify_window: failed to create {}: {:?}",
+                    app_dir.display(),
                     e
                 );
+            } else {
+                let notify_file = app_dir.join("notify_content.json");
+                let content_json = serde_json::json!({ "content": content });
+                if let Err(e) = std::fs::write(&notify_file, content_json.to_string()) {
+                    warn!(
+                        "notify_window: failed to write {}: {:?}",
+                        notify_file.display(),
+                        e
+                    );
+                }
             }
         }
         Err(e) => {
