@@ -101,7 +101,7 @@ fn get_daemon_window() -> WebviewWindow {
 
 // Get monitor where the mouse is currently located
 fn get_current_monitor(x: i32, y: i32) -> Option<Monitor> {
-    log::debug!("Mouse position: {}, {}", x, y);
+    info!("Mouse position: {}, {}", x, y);
     let daemon_window = get_daemon_window();
     let monitors = match daemon_window.available_monitors() {
         Ok(m) => m,
@@ -120,7 +120,7 @@ fn get_current_monitor(x: i32, y: i32) -> Option<Monitor> {
             && y >= position.y
             && y <= (position.y + size.height as i32)
         {
-            log::debug!("Current Monitor: {:?}", m);
+            info!("Current Monitor: {:?}", m);
             return Some(m);
         }
     }
@@ -139,7 +139,7 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
     let app_handle = APP.get().unwrap();
     match app_handle.get_webview_window(label) {
         Some(v) => {
-            log::debug!("Window existence: {}", label);
+            info!("Window existence: {}", label);
             // show() is intentionally not called here — callers may re-center
             // or re-size before the window becomes visible.
             // unminimize() first so set_focus() (and any subsequent show())
@@ -153,7 +153,7 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
             (v, true)
         }
         None => {
-            log::debug!("Window not existence, Creating new window: {}", label);
+            info!("Window not existence, Creating new window: {}", label);
             let mut builder = WebviewWindowBuilder::new(
                 app_handle,
                 label,
