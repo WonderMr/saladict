@@ -427,14 +427,18 @@ pub fn selection_translate() {
 // Try to grab the user's currently-highlighted text. On KDE/GNOME Wayland
 // running saladict under XWayland (GDK_BACKEND=x11) the `selection` crate's
 // PRIMARY read can come back empty if the source app wrote to the Wayland
-// primary buffer instead of the X11 one, so we fall back to the cached text
-// captured by mouse_hook at the moment the user released the mouse.
+// primary buffer instead of the X11 one, so we fall back through several
+// sources before giving up:
+//   1. PRIMARY selection via `selection::get_text()`.
+//   2. mouse_hook cache populated when the user released a selection gesture.
+//   3. Simulated Ctrl+C: temporarily save the clipboard, send Ctrl+C to
+//      copy the current selection, read the clipboard, restore the original
+//      content. This works on XWayland even when PRIMARY isn't mirrored.
 //
-// The system CLIPBOARD is intentionally NOT a fallback here — on sessions
-// where primary selection doesn't bridge correctly it would cause every
-// selection_translate invocation to silently paste whatever was last Ctrl+C'd,
-// which is both surprising and wrong. Users who explicitly want "translate
-// whatever is on my clipboard" can Ctrl+C and use a dedicated flow instead.
+// The raw system CLIPBOARD (what's already there from a past Ctrl+C) is
+// intentionally NOT a fallback here — it would cause every selection_translate
+// invocation to silently paste whatever was last copied, which is both
+// surprising and wrong when the user didn't actually Ctrl+C this time.
 fn capture_selected_text() -> String {
     let primary = selection::get_text();
     if !primary.trim().is_empty() {
@@ -444,6 +448,21 @@ fn capture_selected_text() -> String {
     let cached = crate::mouse_hook::SELECTED_TEXT.lock().clone();
     if !cached.trim().is_empty() {
         return cached;
+    }
+    log::debug!("capture_selected_text: cache empty, simulating Ctrl+C");
+    #[cfg(not(target_os = "macos"))]
+    {
+        use enigo::{Enigo, Settings};
+        match Enigo::new(&Settings::default()) {
+            Ok(mut enigo) => {
+                match crate::utils::get_selected_text_by_clipboard(&mut enigo, false) {
+                    Ok(text) if !text.trim().is_empty() => return text,
+                    Ok(_) => {}
+                    Err(e) => warn!("capture_selected_text: simulated Ctrl+C failed: {:?}", e),
+                }
+            }
+            Err(e) => warn!("capture_selected_text: Enigo init failed: {:?}", e),
+        }
     }
     String::new()
 }
