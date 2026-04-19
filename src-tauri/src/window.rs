@@ -101,7 +101,7 @@ fn get_daemon_window() -> WebviewWindow {
 
 // Get monitor where the mouse is currently located
 fn get_current_monitor(x: i32, y: i32) -> Option<Monitor> {
-    info!("Mouse position: {}, {}", x, y);
+    log::debug!("Mouse position: {}, {}", x, y);
     let daemon_window = get_daemon_window();
     let monitors = match daemon_window.available_monitors() {
         Ok(m) => m,
@@ -120,7 +120,7 @@ fn get_current_monitor(x: i32, y: i32) -> Option<Monitor> {
             && y >= position.y
             && y <= (position.y + size.height as i32)
         {
-            info!("Current Monitor: {:?}", m);
+            log::debug!("Current Monitor: {:?}", m);
             return Some(m);
         }
     }
@@ -139,7 +139,7 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
     let app_handle = APP.get().unwrap();
     match app_handle.get_webview_window(label) {
         Some(v) => {
-            info!("Window existence: {}", label);
+            log::debug!("Window existence: {}", label);
             // show() is intentionally not called here — callers may re-center
             // or re-size before the window becomes visible.
             // unminimize() first so set_focus() (and any subsequent show())
@@ -153,7 +153,7 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
             (v, true)
         }
         None => {
-            info!("Window not existence, Creating new window: {}", label);
+            log::debug!("Window not existence, Creating new window: {}", label);
             let mut builder = WebviewWindowBuilder::new(
                 app_handle,
                 label,
@@ -363,7 +363,7 @@ pub fn translate_window() -> WebviewWindow {
             let (position_x, position_y) = match saved {
                 Some(xy) => xy,
                 None => {
-                    info!(
+                    log::debug!(
                         "translate_window: no saved pre_state position yet; \
                          falling back to mouse cursor"
                     );
@@ -433,37 +433,21 @@ pub fn selection_translate() {
 // needing to know which path their compositor uses.
 fn capture_selected_text() -> String {
     let primary = selection::get_text();
-    info!(
-        "capture_selected_text: primary selection = {:?} (len={})",
-        primary,
-        primary.len()
-    );
     if !primary.trim().is_empty() {
         return primary;
     }
-    let cached = crate::mouse_hook::SELECTED_TEXT.lock().clone();
-    info!(
-        "capture_selected_text: mouse_hook cache = {:?} (len={})",
-        cached,
-        cached.len()
+    log::debug!(
+        "capture_selected_text: primary selection empty, trying mouse_hook cache"
     );
+    let cached = crate::mouse_hook::SELECTED_TEXT.lock().clone();
     if !cached.trim().is_empty() {
         return cached;
     }
+    log::debug!("capture_selected_text: mouse_hook cache empty, trying clipboard");
     match arboard::Clipboard::new() {
         Ok(mut cb) => match cb.get_text() {
-            Ok(text) => {
-                info!(
-                    "capture_selected_text: clipboard = {:?} (len={})",
-                    text,
-                    text.len()
-                );
-                if !text.trim().is_empty() {
-                    text
-                } else {
-                    String::new()
-                }
-            }
+            Ok(text) if !text.trim().is_empty() => text,
+            Ok(_) => String::new(),
             Err(e) => {
                 warn!("capture_selected_text: clipboard read failed: {:?}", e);
                 String::new()
@@ -508,7 +492,6 @@ pub fn text_translate(text: String) {
     // Strip leading/trailing whitespace so a lone "\n" captured by the
     // mouse_hook thumb path doesn't become the translate-window content.
     let trimmed = text.trim();
-    info!("text_translate: input {:?} (len={}) -> trimmed {:?}", text, text.len(), trimmed);
     let app_handle = APP.get().unwrap();
     let state: tauri::State<StringWrapper> = app_handle.state();
     state.0.lock().unwrap().replace_range(.., trimmed);
