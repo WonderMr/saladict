@@ -374,24 +374,65 @@ pub fn translate_window() -> WebviewWindow {
 }
 
 pub fn selection_translate() {
-    use selection::get_text;
-    // Get Selected Text
-    let text = get_text();
+    let text = capture_selected_text();
+
     if !text.trim().is_empty() {
         let app_handle = APP.get().unwrap();
-        // Write into State
         let state: tauri::State<StringWrapper> = app_handle.state();
         state.0.lock().unwrap().replace_range(.., &text);
+    } else {
+        warn!(
+            "selection_translate: no text captured (XDG_SESSION_TYPE={:?}, \
+             WAYLAND_DISPLAY={:?}, GDK_BACKEND={:?}). Highlight text, then \
+             trigger the hotkey — on some Wayland compositors PRIMARY \
+             selection is not mirrored to XWayland, so try Ctrl+C first to \
+             fall back to the system clipboard.",
+            std::env::var("XDG_SESSION_TYPE").ok(),
+            std::env::var("WAYLAND_DISPLAY").ok(),
+            std::env::var("GDK_BACKEND").ok(),
+        );
     }
 
     let window = translate_window();
     // Visibility is handled by the JS handleNewText listener in
     // Translate/components/SourceArea — it reads translate_hide_window and
-    // calls appWindow.show()/hide() + setFocus() itself. Calling show() here
-    // would flash the window visible for users with translate_hide_window
-    // enabled before the JS handler runs and hides it again.
+    // calls appWindow.show()/hide() + setFocus() itself.
     if let Err(e) = window.emit("new_text", text) {
         warn!("selection_translate: emit(new_text) failed: {:?}", e);
+    }
+}
+
+// Try every available source to grab the user's currently-highlighted text.
+// On KDE/GNOME Wayland running saladict under XWayland (GDK_BACKEND=x11),
+// the `selection` crate's PRIMARY read can come back empty if the source
+// app wrote to the Wayland primary buffer instead of X11 PRIMARY. Falling
+// back to the cached text from the mouse hook and then to the system
+// clipboard (Ctrl+C) covers the common failure modes without the user
+// needing to know which path their compositor uses.
+fn capture_selected_text() -> String {
+    let primary = selection::get_text();
+    if !primary.trim().is_empty() {
+        return primary;
+    }
+    info!("selection::get_text() returned empty; trying mouse_hook cache");
+    let cached = crate::mouse_hook::SELECTED_TEXT.lock().clone();
+    if !cached.trim().is_empty() {
+        return cached;
+    }
+    info!("mouse_hook cache empty; trying system clipboard");
+    match arboard::Clipboard::new() {
+        Ok(mut cb) => match cb.get_text() {
+            Ok(text) if !text.trim().is_empty() => text,
+            Ok(_) => String::new(),
+            Err(e) => {
+                warn!("capture_selected_text: clipboard read failed: {:?}", e);
+                String::new()
+            }
+        },
+        Err(e) => {
+            warn!("capture_selected_text: clipboard open failed: {:?}", e);
+            String::new()
+        }
     }
 }
 
