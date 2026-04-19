@@ -15,7 +15,7 @@ import TargetArea from './components/TargetArea';
 import { osType } from '../../utils/env';
 import { useConfig } from '../../hooks';
 import { store } from '../../utils/store';
-import { info } from '@tauri-apps/plugin-log';
+import { info, warn } from '@tauri-apps/plugin-log';
 import { default_translate_service_list } from '../../services/translate/constants';
 
 const appWindow = getCurrentWindow();
@@ -142,7 +142,11 @@ export default function Translate() {
                 if (moveTimeout) {
                     clearTimeout(moveTimeout);
                 }
-                moveTimeout = setTimeout(savePosition, 100);
+                moveTimeout = setTimeout(() => {
+                    savePosition().catch((e) =>
+                        warn(`Translate: savePosition failed: ${e}`)
+                    );
+                }, 100);
             });
             // close-on-blur has a 100ms grace period that races with the
             // 100ms move-debounce — if the user drags the window and clicks
@@ -163,6 +167,13 @@ export default function Translate() {
                 }
             });
             return () => {
+                // Clear any pending debounced save so it doesn't fire after
+                // the listeners are unbound (e.g. when the user switches
+                // translate_window_position away from pre_state mid-session).
+                if (moveTimeout) {
+                    clearTimeout(moveTimeout);
+                    moveTimeout = null;
+                }
                 unlistenMove.then((f) => {
                     f();
                 });
@@ -175,23 +186,30 @@ export default function Translate() {
     // 保存窗口大小
     useEffect(() => {
         if (rememberWindowSize !== null && rememberWindowSize) {
+            const saveSize = async () => {
+                if (appWindow.label !== 'translate') return;
+                // currentMonitor() can resolve to null on Wayland / teardown;
+                // fall back to scaleFactor=1.0 rather than crashing the handler.
+                const monitor = await currentMonitor();
+                const factor = monitor ? monitor.scaleFactor : 1.0;
+                const size = (await appWindow.outerSize()).toLogical(factor);
+                await store.set('translate_window_height', parseInt(size.height));
+                await store.set('translate_window_width', parseInt(size.width));
+                await store.save();
+            };
             const unlistenResize = listen('tauri://resize', async () => {
                 if (resizeTimeout) {
                     clearTimeout(resizeTimeout);
                 }
-                resizeTimeout = setTimeout(async () => {
-                    if (appWindow.label === 'translate') {
-                        let size = await appWindow.outerSize();
-                        const monitor = await currentMonitor();
-                        const factor = monitor.scaleFactor;
-                        size = size.toLogical(factor);
-                        await store.set('translate_window_height', parseInt(size.height));
-                        await store.set('translate_window_width', parseInt(size.width));
-                        await store.save();
-                    }
+                resizeTimeout = setTimeout(() => {
+                    saveSize().catch((e) => warn(`Translate: saveSize failed: ${e}`));
                 }, 100);
             });
             return () => {
+                if (resizeTimeout) {
+                    clearTimeout(resizeTimeout);
+                    resizeTimeout = null;
+                }
                 unlistenResize.then((f) => {
                     f();
                 });
