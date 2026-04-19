@@ -49,6 +49,13 @@ pkgs.mkShell {
     export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules"
     # Workarounds for webkit2gtk-4.1 issues on NixOS
     export GDK_BACKEND=x11              # Wayland protocol error 71 on multi-window
+    # The `selection` crate reads primary selection based on XDG_SESSION_TYPE.
+    # On KDE/GNOME Wayland this is "wayland" and it reads the Wayland primary
+    # buffer via wl_clipboard_rs, but source apps running under XWayland (which
+    # is also our session since GDK_BACKEND=x11) write to the X11 primary.
+    # Force XDG_SESSION_TYPE=x11 so both ends use the same (X11) buffer and
+    # selection_translate actually captures the highlighted text.
+    export XDG_SESSION_TYPE=x11
     export WEBKIT_DISABLE_DMABUF_RENDERER=1  # GBM buffer allocation failure
     export WEBKIT_DISABLE_COMPOSITING_MODE=1 # Additional rendering stability
     # Append to LD_LIBRARY_PATH only if it's already set so we don't leave an
