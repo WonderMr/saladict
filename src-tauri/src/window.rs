@@ -82,7 +82,13 @@ fn get_daemon_window() -> WebviewWindow {
             if !wayland {
                 builder = builder.visible(false);
             }
-            let window = builder.build().unwrap();
+            // Build failure here only happens when the compositor / window
+            // system rejects the creation outright — there's no meaningful
+            // recovery path for a monitor-probe helper, so the descriptive
+            // expect gives a clear message if it ever panics.
+            let window = builder
+                .build()
+                .expect("get_daemon_window: failed to build daemon window");
             if wayland {
                 let _ = window.hide();
             }
@@ -181,7 +187,15 @@ fn build_window(label: &str, title: &str) -> (WebviewWindow, bool) {
             {
                 builder = builder.transparent(true).decorations(false);
             }
-            let window = builder.build().unwrap();
+            // If the window system rejects window creation there's no
+            // recoverable path for a feature window — the translate /
+            // config / recognize / updater / notify / screenshot screens
+            // all need a backing Tauri window to function. Panicking with
+            // a clear message is more diagnostic than silently returning
+            // a dummy handle that would fail on every subsequent call.
+            let window = builder
+                .build()
+                .unwrap_or_else(|e| panic!("build_window: failed to build '{}': {:?}", label, e));
 
             if label != "screenshot" {
                 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -354,7 +368,9 @@ pub fn selection_translate() {
     if let Err(e) = window.show() {
         warn!("selection_translate: show() failed: {:?}", e);
     }
-    window.emit("new_text", text).unwrap();
+    if let Err(e) = window.emit("new_text", text) {
+        warn!("selection_translate: emit(new_text) failed: {:?}", e);
+    }
 }
 
 pub fn input_translate() {
@@ -382,7 +398,9 @@ pub fn input_translate() {
         warn!("input_translate: show() failed: {:?}", e);
     }
 
-    window.emit("new_text", "[INPUT_TRANSLATE]").unwrap();
+    if let Err(e) = window.emit("new_text", "[INPUT_TRANSLATE]") {
+        warn!("input_translate: emit(new_text) failed: {:?}", e);
+    }
 }
 
 pub fn text_translate(text: String) {
@@ -394,7 +412,9 @@ pub fn text_translate(text: String) {
     if let Err(e) = window.show() {
         warn!("text_translate: show() failed: {:?}", e);
     }
-    window.emit("new_text", text).unwrap();
+    if let Err(e) = window.emit("new_text", text) {
+        warn!("text_translate: emit(new_text) failed: {:?}", e);
+    }
 }
 
 pub fn image_translate() {
@@ -409,7 +429,9 @@ pub fn image_translate() {
     if let Err(e) = window.show() {
         warn!("image_translate: show() failed: {:?}", e);
     }
-    window.emit("new_text", "[IMAGE_TRANSLATE]").unwrap();
+    if let Err(e) = window.emit("new_text", "[IMAGE_TRANSLATE]") {
+        warn!("image_translate: emit(new_text) failed: {:?}", e);
+    }
 }
 
 pub fn recognize_window() {
@@ -418,7 +440,9 @@ pub fn recognize_window() {
         if let Err(e) = window.show() {
             warn!("recognize_window: show() failed: {:?}", e);
         }
-        window.emit("new_image", "").unwrap();
+        if let Err(e) = window.emit("new_image", "") {
+            warn!("recognize_window: emit(new_image) failed: {:?}", e);
+        }
         return;
     }
     let width = match get("recognize_window_width") {
@@ -457,7 +481,9 @@ pub fn recognize_window() {
     if let Err(e) = window.show() {
         warn!("recognize_window: show() failed: {:?}", e);
     }
-    window.emit("new_image", "").unwrap();
+    if let Err(e) = window.emit("new_image", "") {
+        warn!("recognize_window: emit(new_image) failed: {:?}", e);
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -598,8 +624,12 @@ pub fn close_thumb() {
     match APP.get() {
         Some(handle) => match handle.get_webview_window(THUMB_WIN_NAME) {
             Some(window) => {
-                if let Err(e) = window.set_position(LogicalPosition::new(-100.0, -100.0)) {
-                    warn!("close_thumb: set_position failed: {:?}", e);
+                // set_position is rejected on Wayland; rely on hide() alone
+                // there and skip moving the window off-screen.
+                if !is_wayland_session() {
+                    if let Err(e) = window.set_position(LogicalPosition::new(-100.0, -100.0)) {
+                        warn!("close_thumb: set_position failed: {:?}", e);
+                    }
                 }
                 if let Err(e) = window.set_always_on_top(false) {
                     warn!("close_thumb: set_always_on_top failed: {:?}", e);
@@ -666,7 +696,14 @@ pub fn get_thumb_window(x: i32, y: i32) -> WebviewWindow {
                 {
                     builder = builder.transparent(true);
                 }
-                let window = builder.build().unwrap();
+                // The thumb window is a tiny 20x20 companion popup; if the
+                // compositor denies creation there's nothing meaningful to
+                // fall back to for show_thumb / close_thumb callers. A
+                // descriptive expect is more diagnostic than silently
+                // returning a dummy handle downstream callers would deref.
+                let window = builder
+                    .build()
+                    .expect("get_thumb_window: failed to build thumb window");
                 if wayland {
                     let _ = window.hide();
                 }
@@ -703,19 +740,23 @@ pub fn get_thumb_window(x: i32, y: i32) -> WebviewWindow {
         }
     };
 
-    let set_position_result = if cfg!(target_os = "macos") {
-        window.set_position(LogicalPosition::new(
-            x as f64 + position_offset,
-            y as f64 + position_offset,
-        ))
-    } else {
-        window.set_position(PhysicalPosition::new(
-            x as f64 + position_offset,
-            y as f64 + position_offset,
-        ))
-    };
-    if let Err(e) = set_position_result {
-        warn!("get_thumb_window: set_position failed: {:?}", e);
+    // set_position is Wayland-problematic; on Wayland the compositor picks
+    // placement and this call would just log noise on every selection.
+    if !is_wayland_session() {
+        let set_position_result = if cfg!(target_os = "macos") {
+            window.set_position(LogicalPosition::new(
+                x as f64 + position_offset,
+                y as f64 + position_offset,
+            ))
+        } else {
+            window.set_position(PhysicalPosition::new(
+                x as f64 + position_offset,
+                y as f64 + position_offset,
+            ))
+        };
+        if let Err(e) = set_position_result {
+            warn!("get_thumb_window: set_position failed: {:?}", e);
+        }
     }
 
     window
