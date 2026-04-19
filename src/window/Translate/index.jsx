@@ -111,24 +111,42 @@ export default function Translate() {
     // 保存窗口位置
     useEffect(() => {
         if (windowPosition !== null && windowPosition === 'pre_state') {
+            // Save once right after the effect binds, so reopening the window
+            // before the user has moved it captures the current placement
+            // (otherwise the Rust side would read 0,0 and pin the window to
+            // the primary monitor's top-left).
+            const savePosition = async () => {
+                if (appWindow.label !== 'translate') return;
+                const position = (await appWindow.outerPosition()).toLogical(
+                    (await currentMonitor()).scaleFactor
+                );
+                await store.set('translate_window_position_x', parseInt(position.x));
+                await store.set('translate_window_position_y', parseInt(position.y));
+                await store.save();
+            };
+            savePosition();
             const unlistenMove = listen('tauri://move', async () => {
                 if (moveTimeout) {
                     clearTimeout(moveTimeout);
                 }
-                moveTimeout = setTimeout(async () => {
-                    if (appWindow.label === 'translate') {
-                        let position = await appWindow.outerPosition();
-                        const monitor = await currentMonitor();
-                        const factor = monitor.scaleFactor;
-                        position = position.toLogical(factor);
-                        await store.set('translate_window_position_x', parseInt(position.x));
-                        await store.set('translate_window_position_y', parseInt(position.y));
-                        await store.save();
-                    }
-                }, 100);
+                moveTimeout = setTimeout(savePosition, 100);
+            });
+            // close-on-blur has a 100ms grace period that races with the
+            // 100ms move-debounce — if the user drags the window and clicks
+            // away immediately the save can lose the race. Save synchronously
+            // on close so the latest position always survives.
+            const unlistenClose = appWindow.onCloseRequested(async () => {
+                if (moveTimeout) {
+                    clearTimeout(moveTimeout);
+                    moveTimeout = null;
+                }
+                await savePosition();
             });
             return () => {
                 unlistenMove.then((f) => {
+                    f();
+                });
+                unlistenClose.then((f) => {
                     f();
                 });
             };

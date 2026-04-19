@@ -348,13 +348,27 @@ pub fn translate_window() -> WebviewWindow {
             }
         }
         _ => {
-            let position_x = match get("translate_window_position_x") {
-                Some(v) => v.as_i64().unwrap(),
-                None => 0,
-            };
-            let position_y = match get("translate_window_position_y") {
-                Some(v) => v.as_i64().unwrap(),
-                None => 0,
+            // translate_window_position is "pre_state" (or any non-"mouse"
+            // value). Use the saved x/y, but only if both are actually in
+            // the config — otherwise the user just enabled pre_state and
+            // hasn't moved the window yet, so fall back to mouse positioning
+            // instead of pinning the window to (0, 0) of the primary monitor.
+            let saved = get("translate_window_position_x")
+                .and_then(|v| v.as_i64())
+                .and_then(|x| {
+                    get("translate_window_position_y")
+                        .and_then(|v| v.as_i64())
+                        .map(|y| (x, y))
+                });
+            let (position_x, position_y) = match saved {
+                Some(xy) => xy,
+                None => {
+                    info!(
+                        "translate_window: no saved pre_state position yet; \
+                         falling back to mouse cursor"
+                    );
+                    (mouse_position.x as i64, mouse_position.y as i64)
+                }
             };
             if !is_wayland_session() {
                 if let Err(e) = window.set_position(tauri::PhysicalPosition::new(
