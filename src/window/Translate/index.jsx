@@ -118,7 +118,14 @@ export default function Translate() {
                 // with "Cannot read properties of null".
                 const monitor = await currentMonitor();
                 const factor = monitor ? monitor.scaleFactor : 1.0;
-                const position = (await appWindow.outerPosition()).toLogical(factor);
+                // Read innerPosition (client-area top-left) rather than
+                // outerPosition. On X11/GTK with decorations(false) set via
+                // build_window, the WM can still report a client-area-shadow
+                // offset in outerPosition() that doesn't round-trip through
+                // Rust's set_position(), which fed a per-reopen drift
+                // accumulation. innerPosition maps 1:1 to what Rust applies
+                // on the next reopen.
+                const position = (await appWindow.innerPosition()).toLogical(factor);
                 await store.set('translate_window_position_x', parseInt(position.x));
                 await store.set('translate_window_position_y', parseInt(position.y));
                 await store.save();
